@@ -57,7 +57,7 @@ class Sequential(Circuit):
     """A sequence of subcircuits being applied one by one"""
     def __init__(self, *circuits):
         self.circuits = list(circuit)
-    
+
     def __iter__(self):
         yield from self.circuits
 

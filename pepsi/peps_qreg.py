@@ -1,6 +1,6 @@
-from pepsi import Peps
-from circuit import Gate, Measure, Peek, Sequential
-from tensor_gate import tensorize
+from . import Peps
+from .circuit import Gate, Measure, Peek, Sequential
+from .tensor_gate import tensorize
 
 
 class PepsQuantumRegister:
