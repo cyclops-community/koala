@@ -1,6 +1,6 @@
 
 class Peps(object):
-    def __init__(self, grid=None, row = None, col = None):
+    def __init__(self, grid = None, row = None, col = None):
         if grid == None:
             if row == None or col ==None:
                 ValueError("Either the grid or the dimensions shoule be provided to construct a PEPs")
@@ -8,8 +8,10 @@ class Peps(object):
                 self.grid = np.empty((row, col), dtype=object)
                 for i in range(row):
                     for j in range(col):
-                        self.grid[i,j] = Site()
-
+                        self.grid[i,j] = np.reshape(
+                                            np.array([1, 0], dtype=complex), 
+                                            [1, 1, 1, 1, 2]
+                                        )
         else:
             self.grid = grid  
 
