@@ -3,7 +3,7 @@ from .circuit import Gate, Measure, Peek, Sequential
 from .tensor_gate import tensorize
 
 
-class PepsQuantumRegister:
+class QuantumRegister:
     def __init__(self, row, col, mapping):
         self.state = Peps(row=row, col=col)
         self.mapping = mapping

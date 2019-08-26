@@ -18,56 +18,44 @@ def tensorize(gate):
 
 @tensorize.register
 def _(gate: I):
-    return TensorGate(
-        tensor=np.eye(2),
-        qubits=(gate.qubit,)
-    )
+    return TensorGate(I_tensor, (gate.qubit,))
 
 
 @tensorize.register
 def _(gate: H):
-    return TensorGate(
-        tensor=np.array([[1,1],[1,-1]],dtype=complex)/np.sqrt(2),
-        qubits=(gate.qubit,)
-    )
+    return TensorGate(H_tensor, (gate.qubit,))
 
 
 @tensorize.register
 def _(gate: X):
-    return TensorGate(
-        tensor=np.array([[0,1],[1,0]],dtype=complex),
-        qubits=(gate.qubit,)
-    )
+    return TensorGate(X_tensor, (gate.qubit,))
 
 
 @tensorize.register
 def _(gate: Y):
-    return TensorGate(
-        tensor=np.array([[0,-1j],[1j,0]],dtype=complex),
-        qubits=(gate.qubit,)
-    )
+    return TensorGate(Y_tensor, (gate.qubit,))
 
 
 @tensorize.register
 def _(gate: Z):
-    return TensorGate(
-        tensor=np.array([[1,0],[0,-1]],dtype=complex),
-        qubits=(gate.qubit,)
-    )
+    return TensorGate(Z_tensor, (gate.qubit,))
 
 
 @tensorize.register
 def _(gate: S):
-    return TensorGate(
-        tensor=np.array([[1,0],[0,1j]],dtype=complex),
-        qubits=(gate.qubit,)
-    )
+    return TensorGate(S_tensor, (gate.qubit,))
 
 
 @tensorize.register
 def _(gate: CX):
-    return TensorGate(
-        tensor=np.array([[1,0,0,0],[0,1,0,0],[0,0,0,1],[0,0,1,0]],dtype=complex),
-        qubits=(gate.ctrl, gate.target)
-    )
+    return TensorGate(CX_tensor, (gate.ctrl, gate.target))
+
+
+I_tensor = np.eye(2,dtype=complex)
+H_tensor = np.array([1,1,1,-1],dtype=complex)/np.sqrt(2).reshape(2,2)
+X_tensor = np.array([0,1,1,0],dtype=complex).reshape(2,2)
+Y_tensor = np.array([0,-1j,1j,0],dtype=complex).reshape(2,2)
+Z_tensor = np.array([1,0,0,-1],dtype=complex).reshape(2,2)
+S_tensor = np.array([1,0,0,1j],dtype=complex).reshape(2,2)
+CX_tensor = np.array([1,0,0,0,0,1,0,0,0,0,0,1,0,0,1,0],dtype=complex).reshape(2,2,2,2)
 
