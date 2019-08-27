@@ -31,7 +31,8 @@ class Peps(object):
 
     def apply_two_qubit_local(self, gate, positions):
         """
-        
+        apply a two qubit gate to given positions (qubits)
+        - gate:
         """
         assert(len(positions == 2))
         sites = [self.grid[p] for p in positions]

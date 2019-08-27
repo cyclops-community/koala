@@ -12,14 +12,11 @@ class QuantumRegister:
         result = []
         if isinstance(circuit, Gate):
             tensor, qubits = tensorize(circuit)
-            # self.state.apply(tensor, *(mapping(qubit) for qubit in qubits))
-            raise NotImplementedError()
+            self.state.apply(tensor, *(mapping(qubit) for qubit in qubits))
         elif isinstance(circuit, Measure):
-            # put measurement output in 'result'
-            raise NotImplementedError()
+            result.append(self.state.measure([mapping(qubit) for qubit in circuit.qubits]))
         elif isinstance(circuit, Peek):
-            # put peek output in 'result'
-            raise NotImplementedError()
+            result.append(self.state.peek([mapping(qubit) for qubit in circuit.qubits], circuit.nsample))
         elif isinstance(circuit, Sequential):
             for subcircuit in circuit:
                 result.extend(self.apply(subcircuit))

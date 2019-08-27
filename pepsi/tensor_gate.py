@@ -3,9 +3,9 @@ from collections import namedtuple
 
 import numpy as np
 
-from circuit import I, H, X, Y, Z, S, T, R, Rx, Ry, Rz
-from circuit import CX, CY, CZ, SWAP
-from circuit import CCX
+from .circuit import I, H, X, Y, Z, S, T, R, Rx, Ry, Rz
+from .circuit import CX, CY, CZ, SWAP
+from .circuit import CCX
 
 
 TensorGate = namedtuple('TensorGate', ['tensor', 'qubits'])
