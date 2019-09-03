@@ -8,35 +8,30 @@ class Peps(object):
                 self.grid = np.empty((row, col), dtype=object)
                 for i in range(row):
                     for j in range(col):
-                        self.grid[i,j] = np.reshape(
-                                            np.array([1, 0], dtype=complex), 
-                                            [1, 1, 1, 1, 2]
-                                        )
+                        self.grid[i,j] = np.array([1,0],dtype=complex).reshape([1,1,1,1,2])
         else:
-            self.grid = grid  
+            self.grid = grid
 
-    # TODO: overload setindex and getindex operators
+    def __getitem__(self, key):
+        return self.grid[key]
 
-    def apply_single_qubit(self, gate, position):
+    def __setitem__(self, key, value):
+        self.grid[key] = value
+
+    def apply_single_qubit(self, gate_tensor, position):
         """
         Apply a single qubit gate at given position.
         """
-        prod = gate.tensor()
-        site_inds = [*range(5)]
-        gate_inds = [4,5]
-        result_inds = [*range(4),5]
-        self.grid[position] = np.einsum(self.grid[position], site_inds,
-                                         prod, gate_inds, 
-                                         result_inds)
+        self.grid[position] = np.einsum('ijklx,xy->ijlky', self.grid[position], gate_tensor)
 
-    def apply_two_qubit_local(self, gate, positions):
+    def apply_two_qubit_local(self, gate_tensor, positions):
         """
-        apply a two qubit gate to given positions (qubits)
+        Apply a two qubit gate to given positions (qubits)
         - gate:
         """
-        assert(len(positions == 2))
+        assert len(positions) == 2
         sites = [self.grid[p] for p in positions]
-        prod = gate.tensor()
+        prod = gate_tensor
 
         # contract sites into gate tensor
         site_inds = [*range(5)]
@@ -69,6 +64,7 @@ class Peps(object):
 
         self.grid[positions[0]] = u
         self.grid[positions[1]] = sv
+
 
 def get_link(pos1, pos2):
     y1,x1 = pos1
