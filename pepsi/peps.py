@@ -1,3 +1,7 @@
+import random
+
+import peps
+
 
 class Peps(object):
     def __init__(self, grid = None, row = None, col = None):
@@ -65,6 +69,21 @@ class Peps(object):
         self.grid[positions[0]] = u
         self.grid[positions[1]] = sv
 
+    def measure(self, positions):
+        result = self.peak(positions, 1)[0]
+        for pos, val in zip(positions, result):
+            self.apply_single_qubit(np.array([[1-val,0],[0,val]]), pos)
+        return result
+
+    def peak(self, positions, nsample):
+        prob = _contract(self.grid)
+        np.absolute(prob, out=prob) # to save memory
+        prob **= 2 # to save memory
+        ndigits = len(prob)
+        to_binary = lambda n: np.array([int(d) for d in f'{n:0{ndigits}b}'])
+        positions_array = [i*self.col+j for i, j in positions]
+        return [to_binary(n)[positions_array] for n in random.choices(range(len(prob)), weights=prob, k=nsample)]
+
 
 def get_link(pos1, pos2):
     y1,x1 = pos1
@@ -89,5 +108,10 @@ def get_link(pos1, pos2):
         ValueError("No link between these two positions")
 
 
-
-
+def _contract(grid):
+    grid = grid.copy()
+    for i in range(len(grid.shape[0])):
+        for j in range(len(grid.shape[1])):
+            grid[i, j] = np.transpose(grid, axes=(0,3,2,1,4))
+    peps_obj = peps.PEPS(grid, backend='numpy')
+    return peps_obj.contract().match_virtual().reshape(-1)
