@@ -1,20 +1,34 @@
 import random
 
-import peps
+import numpy as np
+
+from .contraction import contract_peps
 
 
-class Peps(object):
-    def __init__(self, grid = None, row = None, col = None):
+class PEPS(object):
+    def __init__(self, grid=None, nrow=None, ncol=None):
         if grid == None:
-            if row == None or col ==None:
+            if nrow == None or ncol == None:
                 ValueError("Either the grid or the dimensions shoule be provided to construct a PEPs")
             else:
-                self.grid = np.empty((row, col), dtype=object)
-                for i in range(row):
-                    for j in range(col):
+                self.grid = np.empty((nrow, ncol), dtype=object)
+                for i in range(nrow):
+                    for j in range(ncol):
                         self.grid[i,j] = np.array([1,0],dtype=complex).reshape([1,1,1,1,2])
         else:
             self.grid = grid
+
+    @property
+    def nrow(self):
+        return self.grid.shape[0]
+
+    @property
+    def ncol(self):
+        return self.grid.shape[1]
+
+    @property
+    def shape(self):
+        return self.grid.shape
 
     def __getitem__(self, key):
         return self.grid[key]
@@ -22,20 +36,27 @@ class Peps(object):
     def __setitem__(self, key, value):
         self.grid[key] = value
 
-    def apply_single_qubit(self, gate_tensor, position):
+    def apply_operator(self, tensor, positions):
+        if len(positions) == 1:
+            self.apply_operator_one(tensor, positions[0])
+        elif len(positions) == 2 and is_two_local(*positions):
+            self.apply_operator_two_local(tensor, positions)
+        else:
+            raise ValueError()
+
+    def apply_operator_one(self, tensor, position):
         """
         Apply a single qubit gate at given position.
         """
-        self.grid[position] = np.einsum('ijklx,xy->ijlky', self.grid[position], gate_tensor)
+        self.grid[position] = np.einsum('ijklx,xy->ijkly', self.grid[position], tensor)
 
-    def apply_two_qubit_local(self, gate_tensor, positions):
+    def apply_operator_two_local(self, tensor, positions):
         """
-        Apply a two qubit gate to given positions (qubits)
-        - gate:
+        Apply a two qubit gate to given positions.
         """
         assert len(positions) == 2
         sites = [self.grid[p] for p in positions]
-        prod = gate_tensor
+        prod = tensor
 
         # contract sites into gate tensor
         site_inds = [*range(5)]
@@ -76,13 +97,16 @@ class Peps(object):
         return result
 
     def peak(self, positions, nsample):
-        prob = _contract(self.grid)
+        prob = contract_peps(self.grid)
         np.absolute(prob, out=prob) # to save memory
         prob **= 2 # to save memory
         ndigits = len(prob)
         to_binary = lambda n: np.array([int(d) for d in f'{n:0{ndigits}b}'])
-        positions_array = [i*self.col+j for i, j in positions]
+        positions_array = [i*self.ncol+j for i, j in positions]
         return [to_binary(n)[positions_array] for n in random.choices(range(len(prob)), weights=prob, k=nsample)]
+
+    def contract(self):
+        return contract_peps(self.grid)
 
 
 def get_link(pos1, pos2):
@@ -108,10 +132,6 @@ def get_link(pos1, pos2):
         ValueError("No link between these two positions")
 
 
-def _contract(grid):
-    grid = grid.copy()
-    for i in range(len(grid.shape[0])):
-        for j in range(len(grid.shape[1])):
-            grid[i, j] = np.transpose(grid, axes=(0,3,2,1,4))
-    peps_obj = peps.PEPS(grid, backend='numpy')
-    return peps_obj.contract().match_virtual().reshape(-1)
+def is_two_local(p, q):
+    dx, dy = abs(q[0] - p[0]), abs(q[1] - p[1])
+    return dx == 1 and dy == 0 or dx == 0 and dy == 1
