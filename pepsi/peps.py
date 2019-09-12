@@ -3,6 +3,7 @@ import random
 import numpy as np
 
 from .contraction import contract_peps
+from .linear_algebra import einsvd
 
 
 class PEPS(object):

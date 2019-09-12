@@ -1,3 +1,5 @@
+import numpy as np
+
 
 def einsvd(A, inds):
     """
@@ -17,21 +19,20 @@ def einsvd(A, inds):
     >>> sv.shape
     (48, 1, 2, 4, 6)
     """
-    B = np.moveaxis(A, inds, [i for i in range(len(inds))])
+    B = np.moveaxis(A, inds, [*range(len(inds))])
     left_dim = np.prod(B.shape[:len(inds)])
     shape = B.shape
     B = np.reshape(B, (left_dim, -1))
     u,s,v = np.linalg.svd(B, full_matrices=False)
-    u = np.reshape(u, shape[:len(inds)]+(-1,))
-    sv = np.reshape(np.diag(s)@v, (-1,)+shape[len(inds):])
+    u = np.reshape(u, (*shape[:len(inds)], -1))
+    sv = np.reshape(np.diag(s)@v, (-1, *shape[len(inds):]))
     return u, sv
 
 
 if __name__ == "__main__":
-    import numpy as np
     # a simple test for einsvd	
     dims = (np.random.randint(1,10, size=5)).tolist()
     A = np.random.random_sample(dims)
     u, sv = einsvd(A, [2,4])
     product = np.einsum(u, [1,2,3], sv, [3,4,5,6])
-    assert(np.allclose(product, np.transpose(A, [2,4,0,1,3])))
+    assert np.allclose(product, np.transpose(A, [2,4,0,1,3]))
