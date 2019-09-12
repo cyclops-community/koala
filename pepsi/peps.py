@@ -7,17 +7,32 @@ from .linear_algebra import einsvd
 
 
 class PEPS(object):
-    def __init__(self, grid=None, nrow=None, ncol=None):
-        if grid == None:
-            if nrow == None or ncol == None:
-                ValueError("Either the grid or the dimensions shoule be provided to construct a PEPs")
-            else:
-                self.grid = np.empty((nrow, ncol), dtype=object)
-                for i in range(nrow):
-                    for j in range(ncol):
-                        self.grid[i,j] = np.array([1,0],dtype=complex).reshape([1,1,1,1,2])
-        else:
-            self.grid = grid
+    def __init__(self, grid):
+        self.grid = grid
+
+    @staticmethod
+    def zero_states(nrow, ncol):
+        grid = np.empty((nrow, ncol), dtype=object)
+        for i, j in np.ndindex(nrow, ncol):
+            grid[i, j] = np.array([1,0],dtype=complex).reshape([1,1,1,1,2])
+        return PEPS(grid)
+
+    @staticmethod
+    def one_states(nrow, ncol):
+        grid = np.empty((nrow, ncol), dtype=object)
+        for i, j in np.ndindex(nrow, ncol):
+            grid[i, j] = np.array([0,1],dtype=complex).reshape([1,1,1,1,2])
+        return PEPS(grid)
+
+    @staticmethod
+    def bit_states(bits):
+        bits = np.asarray(bits)
+        if bits.ndim != 2:
+            raise ValueError('Initial bits must be a 2-d array')
+        grid = np.empty(bits.shape)
+        for i, j in np.ndindex(nrow, ncol):
+            grid[i, j] = np.array([0,1] if bits[i,j] else [1,0],dtype=complex).reshape([1,1,1,1,2])
+        return PEPS(grid)
 
     @property
     def nrow(self):
