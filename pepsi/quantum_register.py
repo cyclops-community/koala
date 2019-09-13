@@ -5,7 +5,7 @@ import numpy as np
 
 class QuantumRegister:
     def __init__(self, nrow, ncol, mapping):
-        self.state = PEPS.zero_states(nrow, ncol)
+        self.state = PEPS.zeros_state(nrow, ncol)
         self.mapping = mapping
 
     def apply_gate(self, name, parameters, qubits):

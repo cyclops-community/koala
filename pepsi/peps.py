@@ -11,21 +11,21 @@ class PEPS(object):
         self.grid = grid
 
     @staticmethod
-    def zero_states(nrow, ncol):
+    def zeros_state(nrow, ncol):
         grid = np.empty((nrow, ncol), dtype=object)
         for i, j in np.ndindex(nrow, ncol):
             grid[i, j] = np.array([1,0],dtype=complex).reshape([1,1,1,1,2])
         return PEPS(grid)
 
     @staticmethod
-    def one_states(nrow, ncol):
+    def ones_state(nrow, ncol):
         grid = np.empty((nrow, ncol), dtype=object)
         for i, j in np.ndindex(nrow, ncol):
             grid[i, j] = np.array([0,1],dtype=complex).reshape([1,1,1,1,2])
         return PEPS(grid)
 
     @staticmethod
-    def bit_states(bits):
+    def bits_state(bits):
         bits = np.asarray(bits)
         if bits.ndim != 2:
             raise ValueError('Initial bits must be a 2-d array')
