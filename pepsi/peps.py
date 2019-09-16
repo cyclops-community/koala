@@ -29,7 +29,7 @@ class PEPS(object):
         bits = np.asarray(bits)
         if bits.ndim != 2:
             raise ValueError('Initial bits must be a 2-d array')
-        grid = np.empty(bits.shape)
+        grid = np.empty_like(bits, dtype=object)
         for i, j in np.ndindex(nrow, ncol):
             grid[i, j] = np.array([0,1] if bits[i,j] else [1,0],dtype=complex).reshape([1,1,1,1,2])
         return PEPS(grid)
