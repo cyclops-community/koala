@@ -6,7 +6,7 @@ from .contraction import contract_peps
 from .linear_algebra import einsvd
 
 
-class PEPS(object):
+class PEPS:
     def __init__(self, grid):
         self.grid = grid
 
@@ -136,16 +136,16 @@ def get_link(pos1, pos2):
         elif y == -1:
             return (0,2)
         else:
-            ValueError("No link between these two positions")
+            raise ValueError("No link between these two positions")
     elif y == 0:
         if x == 1:
             return (3,1)
         elif x == -1:
             return (1,3)
         else: 
-            ValueError("No link between these two positions")
+            raise ValueError("No link between these two positions")
     else:
-        ValueError("No link between these two positions")
+        raise ValueError("No link between these two positions")
 
 
 def is_two_local(p, q):
