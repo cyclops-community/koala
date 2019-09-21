@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def einsvd(A, inds, cutoff = 0.0, mode = "abs",maxdim = -1, mindim = 1):
+def einsvd(A, inds, **kwargs):
     """
     Do svd on tensor A with indices specified indices in u and others in sv.
     Indices in u are in the order provided in `inds`.
@@ -24,12 +24,12 @@ def einsvd(A, inds, cutoff = 0.0, mode = "abs",maxdim = -1, mindim = 1):
     shape = B.shape
     B = np.reshape(B, (left_dim, -1))
     u,s,v = np.linalg.svd(B, full_matrices=False)
-    s = truncate(s, cutoff= cutoff, mode=mode, maxdim=maxdim, mindim=mindim)[0]
+    s = truncate(s, **kwargs)[0]
     u = np.reshape(u[:,:len(s)], (*shape[:len(inds)], -1))
     sv = np.reshape(np.diag(s)@v[:len(s), :], (-1, *shape[len(inds):]))
     return u, sv
 
-def truncate(s,cutoff = 0.0, mode = "abs",maxdim = -1, mindim = 1):
+def truncate(s, **kwargs): #cutoff = 0.0, mode = "abs",maxdim = -1, mindim = 1
     """
         truncate(s,cutoff = 0.0, mode = "abs",maxdim = -1, mindim = 1)
     Truncate array `s` according to given rule. maxdim/ mindim has higher priority than absolute/relative cutoff.
@@ -42,8 +42,11 @@ def truncate(s,cutoff = 0.0, mode = "abs",maxdim = -1, mindim = 1):
     - `maxdim`: regardless of other rules, number of sigular values are capped at `maxdim`
     - `mindim`: regardless of other rules, will keep at least `mindim` singular values
     """
-    if maxdim == -1:
-        maxdim = len(s)
+    cutoff = kwargs.get('cutoff', 0.0)
+    mode = kwargs.get('mode', "abs")
+    maxdim = kwargs.get('maxdim', len(s))
+    mindim = kwargs.get('mindim', 1)
+
     p = np.argsort(s)[::-1]
     s = s[p]
     s = np.clip(s, 0.0, None) # zero out negative singular values

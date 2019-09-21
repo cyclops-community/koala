@@ -60,13 +60,13 @@ class PEPS:
         else:
             raise ValueError()
 
-    def apply_operator_one(self, tensor, position):
+    def apply_operator_one(self, tensor, position, **kwargs):
         """
         Apply a single qubit gate at given position.
         """
         self.grid[position] = np.einsum('ijklx,xy->ijkly', self.grid[position], tensor)
 
-    def apply_operator_two_local(self, tensor, positions):
+    def apply_operator_two_local(self, tensor, positions, **kwargs):
         """
         Apply a two qubit gate to given positions.
         """
@@ -93,8 +93,7 @@ class PEPS:
         prod = np.einsum(sites[1], site_inds, prod, gate_inds, result_inds)
 
         #svd split sites
-        # TODO: allow truncations
-        u, sv = einsvd(prod, [0,1,2,6])
+        u, sv = einsvd(prod, [0,1,2,6], **kwargs)
         u_inds = [*range(link0)]+[*range(link0+1,4)]+[4]+[link0]
         u_perm = np.argsort(u_inds)
         u = np.transpose(u, u_perm)
@@ -109,7 +108,7 @@ class PEPS:
     def measure(self, positions):
         result = self.peak(positions, 1)[0]
         for pos, val in zip(positions, result):
-            self.apply_single_qubit(np.array([[1-val,0],[0,val]]), pos)
+            self.apply_operator_one(np.array([[1-val,0],[0,val]]), pos)
         return result
 
     def peak(self, positions, nsample):
