@@ -3,34 +3,35 @@ This module defines the interface of a backend.
 """
 
 class Backend:
-    @staticmethod
-    def shape(a):
+    def shape(self, a):
         raise NotImplementedError()
 
-    @staticmethod
-    def ndim(a):
+    def ndim(self, a):
         raise NotImplementedError()
 
-    @staticmethod
-    def empty(shape, dtype):
+    def empty(self, shape, dtype):
         raise NotImplementedError()
 
-    @staticmethod
-    def zeros(shape, dtype):
+    def zeros(self, shape, dtype):
         raise NotImplementedError()
 
-    @staticmethod
-    def ones(shape, dtype):
+    def ones(self, shape, dtype):
         raise NotImplementedError()
 
-    @staticmethod
-    def astensor(a):
+    def astensor(self, a):
         raise NotImplementedError()
 
-    @staticmethod
-    def einsum(*args, **kwargs):
+    def copy(self, a):
         raise NotImplementedError()
 
-    @staticmethod
-    def einsvd():
+    def reshape(self, newshape):
+        raise NotImplementedError()
+
+    def transpose(self, a, axes=None):
+        raise NotImplementedError()
+
+    def einsum(self, *args, **kwargs):
+        raise NotImplementedError()
+
+    def einsvd(self):
         raise NotImplementedError()

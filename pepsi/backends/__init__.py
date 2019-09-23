@@ -11,12 +11,12 @@ def get_backend(name):
 
 def numpy_backend():
     from .numpy_backend import NumPyBackend
-    return NumPyBackend
+    return NumPyBackend()
 
 
 def ctf_backend():
     from .ctf_backend import CTFBackend
-    return CTFBackend
+    return CTFBackend()
 
 
 _BACKENDS = {

@@ -1,3 +1,7 @@
+"""
+This module wraps the PEPS contraction routines from https://github.com/HaoTy/PEPS
+"""
+
 import numpy as np
 
 import peps
