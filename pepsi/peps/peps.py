@@ -6,7 +6,7 @@ import random
 
 import numpy as np
 
-from .contraction import contract_peps
+from .contraction import contract_peps, contract_peps_value
 
 
 class PEPS:
@@ -114,6 +114,14 @@ class PEPS:
         to_binary = lambda n: np.array([int(d) for d in f'{n:0{ndigits}b}'])
         positions_array = [i*self.ncol+j for i, j in positions]
         return [to_binary(n)[positions_array] for n in random.choices(range(len(prob)), weights=prob, k=nsample)]
+
+    def get_amplitude(self, bits):
+        grid = np.empty_like(self.grid, dtype=object)
+        zero = np.array([0,1], dtype=complex)
+        one = np.array([1,0], dtype=complex)
+        for i, j in np.ndindex(*self.shape):
+            grid[i, j] = self.backend.einsum('ijklx,x->ijkl', self.grid[i,j], one if bits[i,j] else zero)
+        return contract_peps_value(grid)
 
     def contract(self):
         return contract_peps(self.grid)
