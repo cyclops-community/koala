@@ -24,3 +24,6 @@ class QuantumRegister:
 
     def probability(self, bits):
         raise NotImplementedError()
+
+    def expectation(self, observable):
+        raise NotImplementedError()

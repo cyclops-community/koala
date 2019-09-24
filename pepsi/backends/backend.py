@@ -30,6 +30,9 @@ class Backend:
     def transpose(self, a, axes=None):
         raise NotImplementedError()
 
+    def conjugate(self, a):
+        raise NotImplementedError()
+
     def einsum(self, *args, **kwargs):
         raise NotImplementedError()
 

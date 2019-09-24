@@ -21,17 +21,7 @@ class StateVectorQuantumRegister(QuantumRegister):
 
     def apply_gate(self, gate):
         tensor = tensorize(self.backend, gate.name, *gate.parameters)
-        input_state_indices = [*range(self.nqubit)]
-        def replace_indices(indices):
-            for i, q in enumerate(gate.qubits):
-                indices[q] = self.nqubit + i
-            return indices
-        self.backend.einsum(
-            self.state, [*range(self.nqubit)],
-            tensor, [*gate.qubits, *range(self.nqubit, self.nqubit+len(gate.qubits))],
-            replace_indices([*range(self.nqubit)]),
-            out=self.state
-        )
+        apply_operator(self.backend, self.state, tensor, gate.qubits)
 
     def apply_circuit(self, circuit):
         for gate in circuit.gates:
@@ -45,6 +35,31 @@ class StateVectorQuantumRegister(QuantumRegister):
     def probability(self, bits):
         return np.abs(self.amplitude(bits))**2
 
+    def expectation(self, observable):
+        state = self.backend.copy(self.state)
+        for tensor, positions in observable:
+            apply_operator(self.backend, state, self.backend.astensor(tensor), positions)
+        expectation_value = self.backend.einsum(
+            state, range(self.nqubit),
+            self.backend.conjugate(self.state), range(self.nqubit),
+        )
+        return np.real_if_close(expectation_value)
+
     def probabilities(self):
         prob_vector = np.real(self.state)**2 + np.imag(self.state)**2
         return [(index, a) for index, a in np.ndenumerate(state) if not np.isclose(a.conj()*a,0)]
+
+
+def apply_operator(backend, state, operator, axes):
+    ndim = backend.ndim(state)
+    input_state_indices = range(ndim)
+    operator_indices = [*axes, *range(ndim, ndim+len(axes))]
+    output_state_indices = [*range(ndim)]
+    for i, axis in enumerate(axes):
+        output_state_indices[axis] = i + ndim
+    backend.einsum(
+        state, input_state_indices,
+        operator, operator_indices,
+        output_state_indices,
+        out=state
+    )

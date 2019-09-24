@@ -35,6 +35,9 @@ class NumPyBackend(Backend):
     def transpose(self, a, axes=None):
         return np.transpose(a, axes)
 
+    def conjugate(self, a):
+        return np.conjugate(a)
+
     def einsum(self, *args, **kwargs):
         return np.einsum(*args, **kwargs)
 
