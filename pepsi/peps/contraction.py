@@ -16,3 +16,8 @@ def contract_peps(grid):
 def contract_peps_value(grid):
     peps_obj = peps.PEPS(grid, insert_pseudo=False, idx_order=[0,3,2,1])
     return peps_obj.contract()
+
+def contract_inner(this, that):
+    this = peps.PEPS(this, insert_pseudo=False, idx_order=[0,3,2,1,4])
+    that = peps.PEPS(that, insert_pseudo=False, idx_order=[0,3,2,1,4])
+    return this.inner(that).contract()

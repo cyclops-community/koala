@@ -16,22 +16,22 @@ class Observable:
         return Observable([])
 
     @staticmethod
-    def X(position):
-        return Observable([(tensors.X(), (position,))])
+    def X(qubit):
+        return Observable([(tensors.X(), (qubit,))])
 
     @staticmethod
-    def Y(position):
-        return Observable([(tensors.Y(), (position,))])
+    def Y(qubit):
+        return Observable([(tensors.Y(), (qubit,))])
 
     @staticmethod
-    def Z(position):
-        return Observable([(tensors.Z(), (position,))])
+    def Z(qubit):
+        return Observable([(tensors.Z(), (qubit,))])
 
     @staticmethod
-    def operator(tensor, positions):
-        if tensor.ndim != len(positions) * 2:
-            raise ValueError(f'tensor shape and number of positions do not match')
-        return Observable([(tensor, positions)])
+    def operator(tensor, qubits):
+        if tensor.ndim != len(qubits) * 2:
+            raise ValueError(f'tensor shape and number of target qubits do not match')
+        return Observable([(tensor, qubits)])
 
     @staticmethod
     def sum(observables):
@@ -52,7 +52,7 @@ class Observable:
 
     def __str__(self):
         operators_str = ';'.join(
-            f'{operator},{positions}'
-            for operator, positions in self.operators
+            f'{operator},{qubits}'
+            for operator, qubits in self.operators
         )
         return f"Observable({operators_str})"

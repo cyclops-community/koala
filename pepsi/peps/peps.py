@@ -6,7 +6,7 @@ import random
 
 import numpy as np
 
-from .contraction import contract_peps, contract_peps_value
+from .contraction import contract_peps, contract_peps_value, contract_inner
 
 
 class PEPS:
@@ -18,14 +18,14 @@ class PEPS:
     def zeros_state(nrow, ncol, backend):
         grid = np.empty((nrow, ncol), dtype=object)
         for i, j in np.ndindex(nrow, ncol):
-            grid[i, j] = backend.astensor(np.array([1,0],dtype=complex).reshape([1,1,1,1,2]))
+            grid[i, j] = backend.astensor(np.array([1,0],dtype=complex).reshape(1,1,1,1,2))
         return PEPS(grid, backend)
 
     @staticmethod
     def ones_state(nrow, ncol, backend):
         grid = np.empty((nrow, ncol), dtype=object)
         for i, j in np.ndindex(nrow, ncol):
-            grid[i, j] = backend.astensor(np.array([0,1],dtype=complex).reshape([1,1,1,1,2]))
+            grid[i, j] = backend.astensor(np.array([0,1],dtype=complex).reshape(1,1,1,1,2))
         return PEPS(grid, backend)
 
     @staticmethod
@@ -36,7 +36,7 @@ class PEPS:
         grid = np.empty_like(bits, dtype=object)
         for i, j in np.ndindex(*bits.shape):
             grid[i, j] = backend.astensor(
-                np.array([0,1] if bits[i,j] else [1,0],dtype=complex).reshape([1,1,1,1,2])
+                np.array([0,1] if bits[i,j] else [1,0],dtype=complex).reshape(1,1,1,1,2)
             )
         return PEPS(grid, backend)
 
@@ -52,13 +52,25 @@ class PEPS:
     def shape(self):
         return self.grid.shape
 
+    def copy(self):
+        grid = np.empty_like(self.grid)
+        for idx, tensor in np.ndenumerate(self.grid):
+            grid[idx] = self.backend.copy(tensor)
+        return PEPS(grid, self.backend)
+
+    def conjugate(self):
+        grid = np.empty_like(self.grid)
+        for idx, tensor in np.ndenumerate(self.grid):
+            grid[idx] = self.backend.conjugate(tensor)
+        return PEPS(grid, self.backend)
+
     def apply_operator(self, tensor, positions):
         if len(positions) == 1:
             self.apply_operator_one(tensor, positions[0])
         elif len(positions) == 2 and is_two_local(*positions):
             self.apply_operator_two_local(tensor, positions)
         else:
-            raise ValueError()
+            raise ValueError('nonlocal operator is not supported')
 
     def apply_operator_one(self, tensor, position):
         """Apply a single qubit gate at given position."""
@@ -125,6 +137,9 @@ class PEPS:
 
     def contract(self):
         return contract_peps(self.grid)
+
+    def inner(self, peps):
+        return contract_inner(self.grid, peps.grid)
 
 
 def get_link(pos1, pos2):

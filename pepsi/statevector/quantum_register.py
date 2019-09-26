@@ -37,8 +37,8 @@ class StateVectorQuantumRegister(QuantumRegister):
 
     def expectation(self, observable):
         state = self.backend.copy(self.state)
-        for tensor, positions in observable:
-            apply_operator(self.backend, state, self.backend.astensor(tensor), positions)
+        for tensor, qubits in observable:
+            apply_operator(self.backend, state, self.backend.astensor(tensor), qubits)
         expectation_value = self.backend.einsum(
             state, range(self.nqubit),
             self.backend.conjugate(self.state), range(self.nqubit),

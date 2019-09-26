@@ -19,6 +19,9 @@ class PEPSQuantumRegister(QuantumRegister):
     def nqubit(self):
         return self.state.nrow * self.state.ncol
 
+    def _qubit_position(self, qubit):
+        return divmod(qubit, self.state.ncol)
+
     def apply_gate(self, gate):
         tensor = tensorize(self.backend, gate.name, *gate.parameters)
         postitons = [divmod(qubit, self.state.ncol) for qubit in gate.qubits]
@@ -36,6 +39,13 @@ class PEPSQuantumRegister(QuantumRegister):
 
     def probability(self, bits):
         return np.abs(self.amplitude(bits))**2
+
+    def expectation(self, observable):
+        state = self.state.copy()
+        for tensor, qubits in observable:
+            positions = [self._qubit_position(qubit) for qubit in qubits]
+            state.apply_operator(self.backend.astensor(tensor), positions)
+        return state.inner(self.state)
 
     def peak(self, qubits, nsamples):
         self.state.peak(qubtis, nsamples)
