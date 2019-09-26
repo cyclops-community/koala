@@ -45,7 +45,7 @@ class PEPSQuantumRegister(QuantumRegister):
         for tensor, qubits in observable:
             positions = [self._qubit_position(qubit) for qubit in qubits]
             state.apply_operator(self.backend.astensor(tensor), positions)
-        return state.inner(self.state)
+        return np.real_if_close(state.inner(self.state))
 
     def peak(self, qubits, nsamples):
         self.state.peak(qubtis, nsamples)

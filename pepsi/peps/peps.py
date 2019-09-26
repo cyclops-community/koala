@@ -129,8 +129,8 @@ class PEPS:
 
     def get_amplitude(self, bits):
         grid = np.empty_like(self.grid, dtype=object)
-        zero = np.array([0,1], dtype=complex)
-        one = np.array([1,0], dtype=complex)
+        zero = np.array([1,0], dtype=complex)
+        one = np.array([0,1], dtype=complex)
         for i, j in np.ndindex(*self.shape):
             grid[i, j] = self.backend.einsum('ijklx,x->ijkl', self.grid[i,j], one if bits[i,j] else zero)
         return contract_peps_value(grid)
