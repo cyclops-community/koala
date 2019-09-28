@@ -41,11 +41,13 @@ class PEPSQuantumRegister(QuantumRegister):
         return np.abs(self.amplitude(bits))**2
 
     def expectation(self, observable):
-        state = self.state.copy()
+        e = 0
         for tensor, qubits in observable:
+            state = self.state.copy()
             positions = [self._qubit_position(qubit) for qubit in qubits]
             state.apply_operator(self.backend.astensor(tensor), positions)
-        return np.real_if_close(state.inner(self.state))
+            e += np.real_if_close(state.inner(self.state))
+        return e
 
     def peak(self, qubits, nsamples):
         self.state.peak(qubtis, nsamples)

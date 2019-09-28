@@ -36,14 +36,15 @@ class StateVectorQuantumRegister(QuantumRegister):
         return np.abs(self.amplitude(bits))**2
 
     def expectation(self, observable):
-        state = self.backend.copy(self.state)
+        e = 0
         for tensor, qubits in observable:
+            state = self.backend.copy(self.state)
             apply_operator(self.backend, state, self.backend.astensor(tensor), qubits)
-        expectation_value = self.backend.einsum(
-            state, range(self.nqubit),
-            self.backend.conjugate(self.state), range(self.nqubit),
-        )
-        return np.real_if_close(expectation_value)
+            e += np.real_if_close(self.backend.einsum(
+                state, range(self.nqubit),
+                self.backend.conjugate(self.state), range(self.nqubit),
+            ))
+        return e
 
     def probabilities(self):
         prob_vector = np.real(self.state)**2 + np.imag(self.state)**2
