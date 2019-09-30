@@ -28,6 +28,30 @@ class Observable:
         return Observable([(tensors.Z(), (qubit,))])
 
     @staticmethod
+    def XX(first, second):
+        return Observable([(tensors.XX(), (first, second))])
+
+    @staticmethod
+    def XY(first, second):
+        return Observable([(tensors.XY(), (first, second))])
+
+    @staticmethod
+    def XZ(first, second):
+        return Observable([(tensors.XZ(), (first, second))])
+
+    @staticmethod
+    def YY(first, second):
+        return Observable([(tensors.YY(), (first, second))])
+
+    @staticmethod
+    def YZ(first, second):
+        return Observable([(tensors.YZ(), (first, second))])
+
+    @staticmethod
+    def ZZ(first, second):
+        return Observable([(tensors.ZZ(), (first, second))])
+
+    @staticmethod
     def operator(tensor, qubits):
         if tensor.ndim != len(qubits) * 2:
             raise ValueError(f'tensor shape and number of target qubits do not match')

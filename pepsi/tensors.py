@@ -53,3 +53,21 @@ def U3(theta, phi, lmbda):
 
 def SWAP():
     return np.array([1,0,0,0,0,0,1,0,0,1,0,0,0,0,0,1],dtype=complex).reshape(2,2,2,2)
+
+def XX():
+    return np.eninsum('ij,kl->ikjl', X(), X())
+
+def XY():
+    return np.eninsum('ij,kl->ikjl', X(), Y())
+
+def XZ():
+    return np.eninsum('ij,kl->ikjl', X(), Z())
+
+def YY():
+    return np.eninsum('ij,kl->ikjl', Y(), Y())
+
+def YZ():
+    return np.eninsum('ij,kl->ikjl', Y(), Z())
+
+def ZZ():
+    return np.eninsum('ij,kl->ikjl', Z(), Z())
