@@ -40,10 +40,10 @@ class TestStateVector(unittest.TestCase):
             Gate('CX', [], [0,3]),
             Gate('H', [], [2]),
         ]))
-        observable = Observable.sum([
-            Observable.Z(0),
+        observable = 1.5 * Observable.sum([
+            Observable.Z(0) * 2,
             Observable.Z(1),
-            Observable.Z(2),
+            Observable.Z(2) * 2,
             Observable.Z(3),
         ])
-        self.assertTrue(np.isclose(qreg.expectation(observable), -1))
+        self.assertTrue(np.isclose(qreg.expectation(observable), -3))

@@ -1,6 +1,7 @@
 """
 """
 
+from numbers import Real
 
 import numpy as np
 
@@ -67,12 +68,25 @@ class Observable:
     def __iter__(self):
         yield from self.operators
 
+    def scale(self, a):
+        return Observable([(tensor*a, qubits) for tensor, qubits in self.operators])
+
     def __add__(self, other):
         return Observable([*self, *other])
 
     def __iadd__(self, other):
         self.operators.extend(other.operators)
         return self
+
+    def __mul__(self, other):
+        if isinstance(other, Real):
+            return self.scale(other)
+        return NotImplemented
+
+    def __rmul__(self, other):
+        if isinstance(other, Real):
+            return self.scale(other)
+        return NotImplemented
 
     def __str__(self):
         operators_str = ';'.join(
