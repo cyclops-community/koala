@@ -13,6 +13,9 @@ class QuantumRegister:
     def apply_circuit(self, circuit):
         raise NotImplementedError()
 
+    def apply_operator(self, operator, qubits):
+        raise NotImplementedError()
+
     def measure(self, qubits):
         raise NotImplementedError()
 

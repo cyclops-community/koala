@@ -27,6 +27,9 @@ class StateVectorQuantumRegister(QuantumRegister):
         for gate in circuit.gates:
             self.apply_gate(gate)
 
+    def apply_operator(self, operator, qubits):
+        apply_operator(self.backend, self.state, operator, qubits)
+
     def amplitude(self, bits):
         if len(bits) != self.nqubit:
             raise ValueError('bits number and qubits number do not match')

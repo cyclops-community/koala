@@ -24,12 +24,16 @@ class PEPSQuantumRegister(QuantumRegister):
 
     def apply_gate(self, gate):
         tensor = tensorize(self.backend, gate.name, *gate.parameters)
-        postitons = [divmod(qubit, self.state.ncol) for qubit in gate.qubits]
+        postitons = [self._qubit_position(qubit) for qubit in gate.qubits]
         self.state.apply_operator(tensor, postitons)
 
     def apply_circuit(self, circuit):
         for gate in circuit.gates:
             self.apply_gate(gate)
+
+    def apply_operator(self, operator, qubits):
+        postitons = [self._qubit_position(qubit) for qubit in qubits]
+        self.state.apply_operator(operator, postitons)
 
     def amplitude(self, bits):
         if len(bits) != self.nqubit:
