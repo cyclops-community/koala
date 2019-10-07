@@ -2,6 +2,7 @@
 This module implements state vector quantum register.
 """
 
+from string import ascii_letters as chars
 import numpy as np
 
 from ..quantum_register import QuantumRegister
@@ -40,12 +41,13 @@ class StateVectorQuantumRegister(QuantumRegister):
 
     def expectation(self, observable):
         e = 0
+        all_terms = ''.join(chars[i] for i in range(self.nqubit))
+        einstr = f'{all_terms},{all_terms}'
         for tensor, qubits in observable:
             state = self.backend.copy(self.state)
             apply_operator(self.backend, state, self.backend.astensor(tensor), qubits)
             e += np.real_if_close(self.backend.einsum(
-                state, range(self.nqubit),
-                self.backend.conjugate(self.state), range(self.nqubit),
+                einstr, state, self.backend.conjugate(self.state), 
             ))
         return e
 
@@ -61,9 +63,8 @@ def apply_operator(backend, state, operator, axes):
     output_state_indices = [*range(ndim)]
     for i, axis in enumerate(axes):
         output_state_indices[axis] = i + ndim
-    backend.einsum(
-        state, input_state_indices,
-        operator, operator_indices,
-        output_state_indices,
-        out=state
-    )
+    input_terms = ''.join(chars[i] for i in input_state_indices)
+    operator_terms = ''.join(chars[i] for i in operator_indices)
+    output_terms = ''.join(chars[i] for i in output_state_indices)
+    einstr = f'{input_terms},{operator_terms}->{output_terms}'
+    backend.einsum(einstr, state, operator, out=state)

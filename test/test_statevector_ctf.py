@@ -5,12 +5,13 @@ import numpy as np
 from pepsi import StateVectorQuantumRegister, Observable
 
 from .circuit import Circuit, Gate
+from .check_ctf import found_ctf
 
 
+@unittest.skipUnless(found_ctf, 'ctf not found')
 class TestStateVector(unittest.TestCase):
-
     def test_amplitude(self):
-        qreg = StateVectorQuantumRegister(6, backend='numpy')
+        qreg = StateVectorQuantumRegister(6, backend='ctf')
         qreg.apply_circuit(Circuit([
             Gate('X', [], [0]),
             Gate('H', [], [1]),
@@ -22,7 +23,7 @@ class TestStateVector(unittest.TestCase):
         self.assertTrue(np.isclose(qreg.amplitude([1,1,0,1,1,0]), 1j/np.sqrt(2)))
 
     def test_probablity(self):
-        qreg = StateVectorQuantumRegister(6, backend='numpy')
+        qreg = StateVectorQuantumRegister(6, backend='ctf')
         qreg.apply_circuit(Circuit([
             Gate('X', [], [0]),
             Gate('H', [], [1]),
@@ -34,7 +35,7 @@ class TestStateVector(unittest.TestCase):
         self.assertTrue(np.isclose(qreg.probability([1,1,0,1,1,0]), 1/2))
 
     def test_expectation(self):
-        qreg = StateVectorQuantumRegister(6, backend='numpy')
+        qreg = StateVectorQuantumRegister(6, backend='ctf')
         qreg.apply_circuit(Circuit([
             Gate('X', [], [0]),
             Gate('CX', [], [0,3]),

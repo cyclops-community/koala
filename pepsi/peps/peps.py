@@ -3,6 +3,7 @@ This module defines PEPS and operations on it.
 """
 
 import random
+from string import ascii_letters as chars
 
 import numpy as np
 
@@ -76,41 +77,49 @@ class PEPS:
         """Apply a single qubit gate at given position."""
         self.backend.einsum('ijklx,xy->ijkly', self.grid[position], tensor, out=self.grid[position])
 
-    def apply_operator_two_local(self, tensor, positions, **kwargs):
+    def apply_operator_two_local(self, tensor, positions):
         """Apply a two qubit gate to given positions."""
         assert len(positions) == 2
         sites = [self.grid[p] for p in positions]
 
         # contract sites into gate tensor
-        site_inds = [*range(5)]
-        gate_inds = [*range(4,4+4)]
+        site_inds = range(5)
+        gate_inds = range(4,4+4)
         result_inds = [*range(4), *range(5,8)]
-        prod = self.backend.einsum(sites[0], site_inds, tensor, gate_inds, result_inds)
+
+        site_terms = ''.join(chars[i] for i in site_inds)
+        gate_terms = ''.join(chars[i] for i in gate_inds)
+        result_terms = ''.join(chars[i] for i in result_inds)
+        einstr = f'{site_terms},{gate_terms}->{result_terms}'
+        prod = self.backend.einsum(einstr, sites[0], tensor)
 
         link0, link1 = get_link(positions[0], positions[1])
-        gate_inds = [*range(7)]
+        gate_inds = range(7)
         site_inds = [*range(7, 7+4), 4]
         site_inds[link1] = link0
 
         middle = [*range(7, 7+link1), *range(link1+8, 7+4)]
         left = [*range(link0), *range(link0+1,4)]
-        right = [*range(5, 7)]
+        right = range(5, 7)
         result_inds = [*left, *middle, *right]
 
-        prod = self.backend.einsum(sites[1], site_inds, prod, gate_inds, result_inds)
+        site_terms = ''.join(chars[i] for i in site_inds)
+        gate_terms = ''.join(chars[i] for i in gate_inds)
+        result_terms = ''.join(chars[i] for i in result_inds)
+        einstr = f'{site_terms},{gate_terms}->{result_terms}'
+        prod = self.backend.einsum(einstr, sites[1], prod)
 
-        #svd split sites
-        u, sv = self.backend.einsvd(prod, [0,1,2,6], **kwargs)
-        u_inds = [*range(link0), *range(link0+1,4), 4, link0]
-        u_perm = np.argsort(u_inds)
-        u = self.backend.transpose(u, u_perm)
-
-        sv_inds = [link1, *range(link1), *range(link1+1,4), 4]
-        sv_perm = np.argsort(sv_inds)
-        sv = self.backend.transpose(sv, sv_perm)
-
+        # svd split sites
+        prod_inds = [*left, *middle, *right]
+        u_inds = [*range(link0), link0, *range(link0+1,4), 5]
+        v_inds = [*range(7, 7+link1), link0, *range(link1+8, 7+4), 6]
+        prod_terms = ''.join(chars[i] for i in prod_inds)
+        u_terms = ''.join(chars[i] for i in u_inds)
+        v_terms = ''.join(chars[i] for i in v_inds)
+        einstr = f'{prod_terms}->{u_terms},{v_terms}'
+        u, _, v = self.backend.einsvd(einstr, prod)
         self.grid[positions[0]] = u
-        self.grid[positions[1]] = sv
+        self.grid[positions[1]] = v
 
     def measure(self, positions):
         result = self.peak(positions, 1)[0]
@@ -129,8 +138,8 @@ class PEPS:
 
     def get_amplitude(self, bits):
         grid = np.empty_like(self.grid, dtype=object)
-        zero = np.array([1,0], dtype=complex)
-        one = np.array([0,1], dtype=complex)
+        zero = self.backend.astensor(np.array([1,0], dtype=complex))
+        one = self.backend.astensor(np.array([0,1], dtype=complex))
         for i, j in np.ndindex(*self.shape):
             grid[i, j] = self.backend.einsum('ijklx,x->ijkl', self.grid[i,j], one if bits[i,j] else zero)
         return contract_peps_value(grid)

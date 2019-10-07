@@ -2,15 +2,14 @@ import unittest
 
 import numpy as np
 
-from pepsi import PEPSQuantumRegister, Observable
+from pepsi import StateVectorQuantumRegister, Observable
 
 from .circuit import Circuit, Gate
 
 
-class TestPEPS(unittest.TestCase):
-
+class TestStateVector(unittest.TestCase):
     def test_amplitude(self):
-        qreg = PEPSQuantumRegister(2, 3, backend='numpy')
+        qreg = StateVectorQuantumRegister(6, backend='numpy')
         qreg.apply_circuit(Circuit([
             Gate('X', [], [0]),
             Gate('H', [], [1]),
@@ -22,7 +21,7 @@ class TestPEPS(unittest.TestCase):
         self.assertTrue(np.isclose(qreg.amplitude([1,1,0,1,1,0]), 1j/np.sqrt(2)))
 
     def test_probablity(self):
-        qreg = PEPSQuantumRegister(2, 3, backend='numpy')
+        qreg = StateVectorQuantumRegister(6, backend='numpy')
         qreg.apply_circuit(Circuit([
             Gate('X', [], [0]),
             Gate('H', [], [1]),
@@ -34,7 +33,7 @@ class TestPEPS(unittest.TestCase):
         self.assertTrue(np.isclose(qreg.probability([1,1,0,1,1,0]), 1/2))
 
     def test_expectation(self):
-        qreg = PEPSQuantumRegister(2, 3, backend='numpy')
+        qreg = StateVectorQuantumRegister(6, backend='numpy')
         qreg.apply_circuit(Circuit([
             Gate('X', [], [0]),
             Gate('CX', [], [0,3]),
@@ -42,7 +41,7 @@ class TestPEPS(unittest.TestCase):
         ]))
         observable = 1.5 * Observable.sum([
             Observable.Z(0) * 2,
-            Observable.Z(1), 
+            Observable.Z(1),
             Observable.Z(2) * 2,
             Observable.Z(3),
         ])
