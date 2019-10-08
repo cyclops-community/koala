@@ -54,4 +54,4 @@ class PEPSQuantumRegister(QuantumRegister):
         return e
 
     def peak(self, qubits, nsamples):
-        self.state.peak(qubtis, nsamples)
+        self.state.peak(qubits, nsamples)
