@@ -13,7 +13,7 @@ class Observable:
         self.operators = operators
 
     @staticmethod
-    def identity():
+    def zero():
         return Observable([])
 
     @staticmethod
@@ -60,7 +60,7 @@ class Observable:
 
     @staticmethod
     def sum(observables):
-        result = Observable.identity()
+        result = Observable.zero()
         for observable in observables:
             result += observable
         return result
