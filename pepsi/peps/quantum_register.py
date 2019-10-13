@@ -11,9 +11,9 @@ from .peps import PEPS
 
 
 class PEPSQuantumRegister(QuantumRegister):
-    def __init__(self, nrow, ncol, backend):
+    def __init__(self, nrow, ncol, backend, threshold=None):
         self.backend = get_backend(backend)
-        self.state = PEPS.zeros_state(nrow, ncol, self.backend)
+        self.state = PEPS.zeros_state(nrow, ncol, self.backend, threshold)
 
     @property
     def nqubit(self):
