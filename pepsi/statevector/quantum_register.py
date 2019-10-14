@@ -22,14 +22,14 @@ class StateVectorQuantumRegister(QuantumRegister):
 
     def apply_gate(self, gate):
         tensor = tensorize(self.backend, gate.name, *gate.parameters)
-        apply_operator(self.backend, self.state, tensor, gate.qubits)
+        self.state = apply_operator(self.backend, self.state, tensor, gate.qubits)
 
     def apply_circuit(self, circuit):
         for gate in circuit.gates:
             self.apply_gate(gate)
 
     def apply_operator(self, operator, qubits):
-        apply_operator(self.backend, self.state, operator, qubits)
+        self.state = apply_operator(self.backend, self.state, operator, qubits)
 
     def amplitude(self, bits):
         if len(bits) != self.nqubit:
@@ -45,7 +45,7 @@ class StateVectorQuantumRegister(QuantumRegister):
         einstr = f'{all_terms},{all_terms}'
         for tensor, qubits in observable:
             state = self.backend.copy(self.state)
-            apply_operator(self.backend, state, self.backend.astensor(tensor), qubits)
+            state = apply_operator(self.backend, state, self.backend.astensor(tensor), qubits)
             e += np.real_if_close(self.backend.einsum(
                 einstr, state, self.backend.conjugate(self.state), 
             ))
@@ -67,4 +67,4 @@ def apply_operator(backend, state, operator, axes):
     operator_terms = ''.join(chars[i] for i in operator_indices)
     output_terms = ''.join(chars[i] for i in output_state_indices)
     einstr = f'{input_terms},{operator_terms}->{output_terms}'
-    backend.einsum(einstr, state, operator, out=state)
+    return backend.einsum(einstr, state, operator)

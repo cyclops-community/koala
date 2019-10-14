@@ -76,7 +76,7 @@ class PEPS:
 
     def apply_operator_one(self, tensor, position):
         """Apply a single qubit gate at given position."""
-        self.backend.einsum('ijklx,xy->ijkly', self.grid[position], tensor, out=self.grid[position])
+        self.grid[position] = self.backend.einsum('ijklx,xy->ijkly', self.grid[position], tensor)
 
     def apply_operator_two_local(self, tensor, positions):
         """Apply a two qubit gate to given positions."""
