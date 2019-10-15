@@ -71,6 +71,12 @@ class Observable:
     def scale(self, a):
         return Observable([(tensor*a, qubits) for tensor, qubits in self.operators])
 
+    def __pos__(self):
+        return Observable([*self.operators])
+
+    def __neg__(self):
+        return Observable([(-tensor, qubits) for tensor, qubits in self.operators])
+
     def __add__(self, other):
         return Observable([*self, *other])
 
