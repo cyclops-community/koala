@@ -8,6 +8,7 @@ from ..quantum_register import QuantumRegister
 from ..backends import get_backend
 from ..gates import tensorize
 from .peps import PEPS
+from .contraction import create_env_cache, contract_with_env, contract_inner
 
 
 class PEPSQuantumRegister(QuantumRegister):
@@ -44,7 +45,9 @@ class PEPSQuantumRegister(QuantumRegister):
     def probability(self, bits):
         return np.abs(self.amplitude(bits))**2
 
-    def expectation(self, observable):
+    def expectation(self, observable, use_cache=False):
+        if use_cache:
+            return self._expectation_with_cache(observable)
         e = 0
         for tensor, qubits in observable:
             state = self.state.copy()
@@ -55,3 +58,17 @@ class PEPSQuantumRegister(QuantumRegister):
 
     def peak(self, qubits, nsamples):
         self.state.peak(qubits, nsamples)
+
+    def _expectation_with_cache(self, observable):
+        env = create_env_cache(self.state.grid)
+        e = 0
+        for tensor, qubits in observable:
+            state = self.state.copy()
+            positions = [self._qubit_position(qubit) for qubit in qubits]
+            state.apply_operator(self.backend.astensor(tensor), positions)
+            rows = [row for row, _ in positions]
+            up, down = min(rows), max(rows)
+            e += np.real_if_close(contract_with_env(
+                state.grid[up:down+1], self.state.grid[up:down+1], env, up, down
+            ))
+        return e
