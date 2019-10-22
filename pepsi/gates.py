@@ -124,3 +124,8 @@ def CU3(backend, theta, phi, lmbda):
 @lru_cache(maxsize=None)
 def SWAP(backend):
     return backend.astensor(tensors.SWAP())
+
+@_register
+@lru_cache(maxsize=None)
+def ISWAP(backend):
+    return backend.astensor(tensors.ISWAP())
