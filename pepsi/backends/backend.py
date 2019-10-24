@@ -38,3 +38,6 @@ class Backend:
 
     def einsvd(self):
         raise NotImplementedError()
+
+    def norm2(self):
+        raise NotImplementedError()

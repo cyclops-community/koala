@@ -31,6 +31,9 @@ class StateVectorQuantumRegister(QuantumRegister):
     def apply_operator(self, operator, qubits):
         self.state = apply_operator(self.backend, self.state, operator, qubits)
 
+    def normalize(self):
+        self.state /= self.backend.norm2(self.state)
+
     def amplitude(self, bits):
         if len(bits) != self.nqubit:
             raise ValueError('bits number and qubits number do not match')

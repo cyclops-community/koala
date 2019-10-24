@@ -118,6 +118,9 @@ class NumPyBackend(Backend):
         vh = np.einsum(char_i + str_v.replace(char_i, '') + '->' + str_v, vh.reshape([-1] + [A.shape[str_a.find(c)] for c in str_v if c != char_i]))
         return u, s, vh
 
+    def norm2(self, a):
+        return la.norm(a)
+
     # def einsvd(self, A, inds, **kwargs):
     #     """Do svd on tensor A with indices specified indices in u and others in sv.
     #     Indices in u are in the order provided in `inds`.

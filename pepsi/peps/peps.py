@@ -3,6 +3,7 @@ This module defines PEPS and operations on it.
 """
 
 import random
+from math import sqrt
 from string import ascii_letters as chars
 
 import numpy as np
@@ -121,6 +122,12 @@ class PEPS:
         u, _, v = self.backend.einsvd(einstr, prod, criterion=2, threshold=self.threshold)
         self.grid[positions[0]] = u
         self.grid[positions[1]] = v
+
+    def normalize(self):
+        norm = sqrt(np.real_if_close(self.inner(self)))
+        divider = norm ** (1/(self.nrow * self.ncol))
+        for idx in np.ndindex(*self.shape):
+            self.grid[idx] /= divider
 
     def measure(self, positions):
         result = self.peak(positions, 1)[0]

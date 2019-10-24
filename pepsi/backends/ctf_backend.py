@@ -116,3 +116,6 @@ class CTFBackend(Backend):
             u = ctf.einsum(str_u + ',' + char_s + char_i + '->' + str_u.replace(char_i, char_s), u, sqrtS)
 
         return u, s, vh
+
+    def norm2(self, a):
+        return a.norm2()

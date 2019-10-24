@@ -36,6 +36,9 @@ class PEPSQuantumRegister(QuantumRegister):
         postitons = [self._qubit_position(qubit) for qubit in qubits]
         self.state.apply_operator(operator, postitons)
 
+    def normalize(self):
+        self.state.normalize()
+
     def amplitude(self, bits):
         if len(bits) != self.nqubit:
             raise ValueError('bits number and qubits number do not match')

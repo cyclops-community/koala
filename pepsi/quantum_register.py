@@ -16,6 +16,9 @@ class QuantumRegister:
     def apply_operator(self, operator, qubits):
         raise NotImplementedError()
 
+    def normalize(self):
+        raise NotImplementedError()
+
     def measure(self, qubits):
         raise NotImplementedError()
 
