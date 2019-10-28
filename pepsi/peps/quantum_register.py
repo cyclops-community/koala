@@ -12,9 +12,9 @@ from .contraction import create_env_cache, contract_with_env, contract_inner
 
 
 class PEPSQuantumRegister(QuantumRegister):
-    def __init__(self, nrow, ncol, backend, threshold=None):
+    def __init__(self, nrow, ncol, backend, threshold=None, rescale=True):
         self.backend = get_backend(backend)
-        self.state = PEPS.zeros_state(nrow, ncol, self.backend, threshold)
+        self.state = PEPS.zeros_state(nrow, ncol, self.backend, threshold, rescale)
 
     @property
     def nqubit(self):

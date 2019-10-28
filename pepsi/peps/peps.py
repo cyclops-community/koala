@@ -12,27 +12,28 @@ from .contraction import contract_peps, contract_peps_value, contract_inner
 
 
 class PEPS:
-    def __init__(self, grid, backend, threshold):
+    def __init__(self, grid, backend, threshold, rescale):
         self.backend = backend
         self.grid = grid
         self.threshold = threshold
+        self.rescale = rescale
 
     @staticmethod
-    def zeros_state(nrow, ncol, backend, threshold=None):
+    def zeros_state(nrow, ncol, backend, threshold=None, rescale=True):
         grid = np.empty((nrow, ncol), dtype=object)
         for i, j in np.ndindex(nrow, ncol):
             grid[i, j] = backend.astensor(np.array([1,0],dtype=complex).reshape(1,1,1,1,2))
-        return PEPS(grid, backend, threshold)
+        return PEPS(grid, backend, threshold, rescale)
 
     @staticmethod
-    def ones_state(nrow, ncol, backend, threshold=None):
+    def ones_state(nrow, ncol, backend, threshold=None, rescale=True):
         grid = np.empty((nrow, ncol), dtype=object)
         for i, j in np.ndindex(nrow, ncol):
             grid[i, j] = backend.astensor(np.array([0,1],dtype=complex).reshape(1,1,1,1,2))
-        return PEPS(grid, backend, threshold)
+        return PEPS(grid, backend, threshold, rescale)
 
     @staticmethod
-    def bits_state(bits, backend, threshold=None):
+    def bits_state(bits, backend, threshold=None, rescale=True):
         bits = np.asarray(bits)
         if bits.ndim != 2:
             raise ValueError('Initial bits must be a 2-d array')
@@ -41,7 +42,7 @@ class PEPS:
             grid[i, j] = backend.astensor(
                 np.array([0,1] if bits[i,j] else [1,0],dtype=complex).reshape(1,1,1,1,2)
             )
-        return PEPS(grid, backend, threshold)
+        return PEPS(grid, backend, threshold, rescale)
 
     @property
     def nrow(self):
@@ -59,13 +60,13 @@ class PEPS:
         grid = np.empty_like(self.grid)
         for idx, tensor in np.ndenumerate(self.grid):
             grid[idx] = self.backend.copy(tensor)
-        return PEPS(grid, self.backend, self.threshold)
+        return PEPS(grid, self.backend, self.threshold, self.rescale)
 
     def conjugate(self):
         grid = np.empty_like(self.grid)
         for idx, tensor in np.ndenumerate(self.grid):
             grid[idx] = self.backend.conjugate(tensor)
-        return PEPS(grid, self.backend)
+        return PEPS(grid, self.backend, self.threshold, self.rescale)
 
     def apply_operator(self, tensor, positions):
         if len(positions) == 1:
@@ -119,9 +120,12 @@ class PEPS:
         u_terms = ''.join(chars[i] for i in u_inds)
         v_terms = ''.join(chars[i] for i in v_inds)
         einstr = f'{prod_terms}->{u_terms},{v_terms}'
-        u, _, v = self.backend.einsvd(einstr, prod, criterion=2, threshold=self.threshold)
-        self.grid[positions[0]] = u
-        self.grid[positions[1]] = v
+        u, s, v = self.backend.einsvd(einstr, prod, criterion=2, threshold=self.threshold, mult_s=False)
+        if self.rescale:
+            s /= self.backend.norm2(s)
+        s **= 0.5
+        self.grid[positions[0]] = self.backend.einsum(f'{u_terms},{chars[link0]}->{u_terms}', u, s)
+        self.grid[positions[1]] = self.backend.einsum(f'{v_terms},{chars[link0]}->{v_terms}', v, s)
 
     def normalize(self):
         norm = sqrt(np.real_if_close(self.inner(self)))
