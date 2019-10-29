@@ -12,7 +12,7 @@ from .contraction import create_env_cache, contract_with_env, contract_inner
 
 
 class PEPSQuantumRegister(QuantumRegister):
-    def __init__(self, nrow, ncol, backend, threshold=1e-6, rescale=True):
+    def __init__(self, nrow, ncol, backend, threshold=1e-6, rescale=False):
         self.backend = get_backend(backend)
         self.state = PEPS.zeros_state(nrow, ncol, self.backend, threshold, rescale)
 

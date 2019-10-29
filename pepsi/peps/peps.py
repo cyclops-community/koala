@@ -120,12 +120,9 @@ class PEPS:
         u_terms = ''.join(chars[i] for i in u_inds)
         v_terms = ''.join(chars[i] for i in v_inds)
         einstr = f'{prod_terms}->{u_terms},{v_terms}'
-        u, s, v = self.backend.einsvd(einstr, prod, criterion=2, threshold=self.threshold, mult_s=False)
-        if self.rescale:
-            s /= self.backend.norm2(s)
-        s **= 0.5
-        self.grid[positions[0]] = self.backend.einsum(f'{u_terms},{chars[link0]}->{u_terms}', u, s)
-        self.grid[positions[1]] = self.backend.einsum(f'{v_terms},{chars[link0]}->{v_terms}', v, s)
+        u, _, v = self.backend.einsvd(einstr, prod, criterion=2, threshold=self.threshold, mult_s=True, rescale=self.rescale)
+        self.grid[positions[0]] = u
+        self.grid[positions[1]] = v
 
     def normalize(self):
         norm = sqrt(np.real_if_close(self.inner(self)))

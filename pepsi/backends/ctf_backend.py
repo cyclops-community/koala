@@ -44,7 +44,7 @@ class CTFBackend(Backend):
     def einsum(self, *args, **kwargs):
         return ctf.einsum(*args, **kwargs)
 
-    def einsvd(self, einstr, A, rank=None, threshold=None, size_limit=None, criterion=None, mult_s=True):
+    def einsvd(self, einstr, A, rank=None, threshold=None, size_limit=None, criterion=None, mult_s=True, rescale=False):
         """
         Perform Singular Value Decomposition according to the specified Einstein notation string. 
         Will always preserve at least one singular value during the truncation.
@@ -105,7 +105,7 @@ class CTFBackend(Backend):
                     break;
             if rank < s.size:
                 u = u[tuple(slice(None) for i in range(str_u.find(char_i))) + (slice(0, rank),)]
-                s = s[:rank]
+                s = s[:rank] * (s.norm2() / s[:rank].norm2()) if rescale else s[:rank]
                 vh = vh[tuple(slice(None) for i in range(str_v.find(char_i))) + (slice(0, rank),)]
 
         if mult_s:

@@ -42,7 +42,7 @@ class NumPyBackend(Backend):
     def einsum(self, *args, **kwargs):
         return np.einsum(*args, **kwargs)
 
-    def einsvd(self, einstr, A, rank=None, threshold=None, size_limit=None, criterion=None, mult_s=True):
+    def einsvd(self, einstr, A, rank=None, threshold=None, size_limit=None, criterion=None, mult_s=True, rescale=False):
         """
         Perform Singular Value Decomposition according to the specified Einstein notation string. 
         Will always preserve at least one singular value during the truncation.
@@ -105,7 +105,7 @@ class NumPyBackend(Backend):
 
         if rank < len(s):
             u = u[:,:rank]
-            s = s[:rank]
+            s = s[:rank] * (la.norm(s) / la.norm(s[:rank])) if rescale else s[:rank]
             vh = vh[:rank]
 
         if mult_s:
