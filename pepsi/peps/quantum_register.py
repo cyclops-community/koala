@@ -37,7 +37,18 @@ class PEPSQuantumRegister(QuantumRegister):
         self.state.apply_operator(operator, postitons)
 
     def normalize(self):
-        self.state.normalize()
+        self /= self.norm()
+
+    def norm(self):
+        return self.state.norm()
+
+    def __imul__(self, a):
+        result = self.state.__imul__(a)
+        return self if result is not NotImplemented else NotImplemented
+
+    def __itruediv__(self, a):
+        result = self.state.__itruediv__(a)
+        return self if result is not NotImplemented else NotImplemented
 
     def amplitude(self, bits):
         if len(bits) != self.nqubit:

@@ -8,6 +8,21 @@ from .circuit import Circuit, Gate
 
 
 class TestStateVector(unittest.TestCase):
+    def test_norm(self):
+        qreg = StateVectorQuantumRegister(6, backend='numpy')
+        qreg.apply_circuit(Circuit([
+            Gate('X', [], [0]),
+            Gate('H', [], [1]),
+            Gate('CX', [], [0,3]),
+            Gate('CX', [], [1,4]),
+            Gate('S', [], [1]),
+        ]))
+        self.assertTrue(np.isclose(qreg.norm(), 1))
+        qreg *= 2
+        self.assertTrue(np.isclose(qreg.norm(), 2))
+        qreg /= 2j
+        self.assertTrue(np.isclose(qreg.norm(), 1))
+
     def test_amplitude(self):
         qreg = StateVectorQuantumRegister(6, backend='numpy')
         qreg.apply_circuit(Circuit([

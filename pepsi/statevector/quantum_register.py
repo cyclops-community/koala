@@ -2,6 +2,7 @@
 This module implements state vector quantum register.
 """
 
+from numbers import Number
 from string import ascii_letters as chars
 import numpy as np
 
@@ -32,7 +33,24 @@ class StateVectorQuantumRegister(QuantumRegister):
         self.state = apply_operator(self.backend, self.state, operator, qubits)
 
     def normalize(self):
-        self.state /= self.backend.norm2(self.state)
+        self /= self.norm()
+
+    def norm(self):
+        return self.backend.norm2(self.state)
+
+    def __imul__(self, a):
+        if isinstance(a, Number):
+            self.state *= a
+            return self
+        else:
+            return NotImplemented
+
+    def __itruediv__(self, a):
+        if isinstance(a, Number):
+            self.state /= a
+            return self
+        else:
+            return NotImplemented
 
     def amplitude(self, bits):
         if len(bits) != self.nqubit:

@@ -19,6 +19,15 @@ class QuantumRegister:
     def normalize(self):
         raise NotImplementedError()
 
+    def norm(self):
+        raise NotImplementedError()
+
+    def __imul__(self, a):
+        raise NotImplementedError()
+
+    def __itruediv__(self, a):
+        raise NotImplementedError()
+
     def measure(self, qubits):
         raise NotImplementedError()
 
