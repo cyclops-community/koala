@@ -61,6 +61,31 @@ def Tdag(backend):
     return backend.astensor(tensors.Tdag())
 
 @_register
+@lru_cache(maxsize=None)
+def W(backend):
+    return backend.astensor(tensors.W())
+
+@_register
+@lru_cache(maxsize=None)
+def sqrtX(backend):
+    return backend.astensor(tensors.sqrtX())
+
+@_register
+@lru_cache(maxsize=None)
+def sqrtY(backend):
+    return backend.astensor(tensors.sqrtY())
+
+@_register
+@lru_cache(maxsize=None)
+def sqrtZ(backend):
+    return backend.astensor(tensors.sqrtZ())
+
+@_register
+@lru_cache(maxsize=None)
+def sqrtW(backend):
+    return backend.astensor(tensors.sqrtW())
+
+@_register
 @lru_cache(maxsize=64)
 def R(backend, theta):
     return backend.astensor(tensors.R(theta))

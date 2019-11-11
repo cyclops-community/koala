@@ -2,6 +2,7 @@
 This module defines some common tensors in NumPy.
 """
 
+from math import sqrt
 from itertools import repeat
 
 import numpy as np
@@ -36,6 +37,21 @@ def T():
 
 def Tdag():
     return U1(-np.pi/4)
+
+def W():
+    return (X()+Y())/sqrt(2)
+
+def sqrtX():
+    return np.array([1+1j,1-1j,1-1j,1+1j],dtype=complex).reshape(2,2)/2
+
+def sqrtY():
+    return np.array([1+1j,-1-1j,1+1j,1+1j],dtype=complex).reshape(2,2)/2
+
+def sqrtZ():
+    return S()
+
+def sqrtW():
+    return np.array([1+1j,-sqrt(2)*1j,sqrt(2),1+1j],dtype=complex).reshape(2,2)/2
 
 def R(theta):
     return U1(theta)
