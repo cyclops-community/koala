@@ -176,27 +176,20 @@ class PEPS:
         return contract_inner(self.grid, peps.grid)
 
 
-def get_link(pos1, pos2):
-    y1,x1 = pos1
-    y2,x2 = pos2
-    x = x2-x1
-    y = y2-y1
-    if x == 0:
-        if y == 1:
-            return (2,0)
-        elif y == -1:
-            return (0,2)
-        else:
-            raise ValueError("No link between these two positions")
-    elif y == 0:
-        if x == 1:
-            return (3,1)
-        elif x == -1:
-            return (1,3)
-        else:
-            raise ValueError("No link between these two positions")
+def get_link(p, q):
+    if not is_two_local(p, q):
+        raise ValueError(f'No link between {p} and {q}')
+    dx, dy = q[0] - p[0], q[1] - p[1]
+    if (dx, dy) == (0, 1):
+        return (3, 1)
+    elif (dx, dy) == (0, -1):
+        return (1, 3)
+    elif (dx, dy) == (1, 0):
+        return (2, 0)
+    elif (dx, dy) == (-1, 0):
+        return (0, 2)
     else:
-        raise ValueError("No link between these two positions")
+        assert False
 
 
 def is_two_local(p, q):
