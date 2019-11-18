@@ -16,9 +16,9 @@ def tn_add(a, b, internal_bonds, external_bonds):
     lim[external_bonds] = None
     
     ind = tuple([slice(lim[i]) for i in range(ndim)])
-    c[ind] = a
+    c[ind] += a
     ind = tuple([slice(lim[i], None) for i in range(ndim)])
-    c[ind] = b
+    c[ind] += b
 
     return c
 
@@ -26,13 +26,13 @@ def tn_add(a, b, internal_bonds, external_bonds):
 # test
 if __name__=='__main__':
     # test two side mpo addition
-    a1 = np.random.random((3,4))
-    a2 = np.random.random((3,7))
-    b1 = np.random.random((4,5))
-    b2 = np.random.random((7,5))
+    a1 = np.random.random((1,3,4))
+    a2 = np.random.random((1,3,7))
+    b1 = np.random.random((4,5,1))
+    b2 = np.random.random((7,5,1))
     c = np.random.random((3,5))
-    a = tn_add(a1, a2, [1], [0])
-    b = tn_add(b1, b2, [0], [1])
-    test = np.einsum('ab,bc,ac', a, b ,c)
-    ref =  np.einsum('ab,bc,ac', a1, b1,c) + np.einsum('ab,bc,ac', a2, b2,c)
-    assert np.isclose(test,ref)
+    a = tn_add(a1, a2, [2], [0,1])
+    b = tn_add(b1, b2, [0], [1,2])
+    test = np.einsum('dab,bcd,ac->d', a, b ,c)
+    ref =  np.einsum('dab,bcd,ac->d', a1, b1,c) + np.einsum('dab,bcd,ac->d', a2, b2,c)
+    assert np.allclose(test,ref)
