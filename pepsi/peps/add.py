@@ -1,4 +1,5 @@
 import numpy as np 
+from .peps import empty_state
 
 def tn_add(a, b, internal_bonds, external_bonds):
     r"""
@@ -22,6 +23,24 @@ def tn_add(a, b, internal_bonds, external_bonds):
 
     return c
 
+def pep_add(peps1, peps2):
+    nrows, ncols = peps1.shape
+    peps3 = peps.empty_state(nrows, ncols, peps1.backend, peps1.threshold, peps1.rescale)
+    for r in range(nrows):
+        for c in range(ncols):
+            internal_bonds = np.arange(4)
+            external_bonds = np.array([4])
+            if r == 0: # left boundary
+                pass
+            if r == nrows-1: # right boundary
+                pass 
+            if c == 0: # upper boundary
+                pass
+            if c == ncols-1: # lower boundary
+                pass
+        # site wise add
+    return peps3
+            
 
 # test
 if __name__=='__main__':
