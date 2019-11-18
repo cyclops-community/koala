@@ -61,6 +61,12 @@ class PEPS:
     def shape(self):
         return self.grid.shape
 
+    def __getitem__(self, ind):
+        return self.grid[ind]
+    
+    def __setitem__(self, ind, site):
+        self.grid[ind] = site
+    
     def copy(self):
         grid = np.empty_like(self.grid)
         for idx, tensor in np.ndenumerate(self.grid):
