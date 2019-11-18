@@ -44,6 +44,11 @@ class PEPS:
             )
         return PEPS(grid, backend, threshold)
 
+    @staticmethod
+    def empty_state(nrow, ncol, backend, threshold=None, rescale=True):
+        grid = np.empty((nrow, ncol), dtype=object)
+        return PEPS(grid, backend, threshold, rescale)
+    
     @property
     def nrow(self):
         return self.grid.shape[0]
@@ -178,6 +183,7 @@ class PEPS:
 
     def inner(self, peps):
         return contract_inner(self.grid, peps.grid)
+# end class PEPS
 
 
 def get_link(p, q):
