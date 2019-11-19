@@ -7,7 +7,6 @@ def tn_add(a, b, internal_bonds, external_bonds):
     Helper function for addition of two tensor network states with the same structure. 
     Add two site from two tensor network states respecting specified inner and external bond structure. 
     """
-    print(a.shape, b.shape, internal_bonds, external_bonds)
     ndim = np.ndim(a)
     shape_a = np.array(np.shape(a))
     shape_b = np.array(np.shape(b))
@@ -47,7 +46,6 @@ def peps_add(peps1, peps2):
             if r == ncols-1: # lower boundary
                 internal_bonds.remove(2)
                 external_bonds.append(2)
-            print(peps1[r,c])
             peps3[r,c] = tn_add(peps1[r,c], peps2[r,c], internal_bonds, external_bonds)
     return peps3
             
@@ -73,3 +71,4 @@ if __name__=='__main__':
     peps1 = PEPS.zeros_state(nrow, ncol, be)
     peps2 = PEPS.ones_state(nrow, ncol, be)
     print(peps_add(peps1, peps2))
+    
