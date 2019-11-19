@@ -44,11 +44,6 @@ class PEPS:
             )
         return PEPS(grid, backend, threshold)
 
-    @staticmethod
-    def empty_state(nrow, ncol, backend, threshold=None, rescale=True):
-        grid = np.empty((nrow, ncol), dtype=object)
-        return PEPS(grid, backend, threshold, rescale)
-    
     @property
     def nrow(self):
         return self.grid.shape[0]
@@ -143,6 +138,12 @@ class PEPS:
     def norm(self):
         return sqrt(np.real_if_close(self.inner(self)))
 
+    def __add__(self, other):
+        if isinstance(other, PEPS):
+            return self.add(other)
+        else:
+            return NotImplemented
+
     def __imul__(self, a):
         if isinstance(a, Number):
             multiplier = a ** (1/(self.nrow * self.ncol))
@@ -160,6 +161,24 @@ class PEPS:
             return self
         else:
             return NotImplemented
+
+    def add(self, other):
+        """
+        Add two PEPS of the same grid shape and return the sum as a third PEPS also with the same grid shape.
+        """
+        if self.shape != other.shape:
+            raise ValueError(f'PEPS shapes do not match: {self.shape} != {other.shape}')
+        grid = np.empty(self.shape, dtype=object)
+        for i, j in np.ndindex(*self.grid.shape):
+            internal_bonds = []
+            external_bonds = [4]
+            (external_bonds if i == 0 else internal_bonds).append(0)
+            (external_bonds if j == 0 else internal_bonds).append(1)
+            (external_bonds if i == self.shape[0] - 1 else internal_bonds).append(2)
+            (external_bonds if j == self.shape[1] - 1 else internal_bonds).append(3)
+            grid[i, j] = tn_add(self.backend, self[i, j], other[i, j], internal_bonds, external_bonds)
+        return PEPS(grid, self.backend, self.threshold)
+
 
     def measure(self, positions):
         result = self.peak(positions, 1)[0]
@@ -221,3 +240,23 @@ def truncate(backend, u, s, v, u_axis, v_axis, threshold=None):
     v_slice = tuple(slice(None) if i != v_axis else slice(rank) for i in range(v.ndim))
     s_slice = slice(rank)
     return u[u_slice], s[s_slice], v[s_slice]
+
+
+def tn_add(backend, a, b, internal_bonds, external_bonds):
+    """
+    Helper function for addition of two tensor network states with the same structure. 
+    Add two site from two tensor network states respecting specified inner and external bond structure. 
+    """
+    ndim = a.ndim
+    shape_a = np.array(np.shape(a))
+    shape_b = np.array(np.shape(b))
+    shape_c = np.copy(shape_a)
+    shape_c[internal_bonds] += shape_b[internal_bonds]
+    lim = np.copy(shape_a).astype(object)
+    lim[external_bonds] = None    
+    a_ind = tuple([slice(lim[i]) for i in range(ndim)])
+    b_ind = tuple([slice(lim[i], None) for i in range(ndim)])
+    c = backend.zeros(shape_c, dtype=a.dtype)
+    c[a_ind] += a
+    c[b_ind] += b
+    return c
