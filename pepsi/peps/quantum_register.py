@@ -4,17 +4,18 @@ This module defines the quantum register based on PEPS.
 
 import numpy as np
 
+import tensorbackends
+
 from ..quantum_register import QuantumRegister
-from ..backends import get_backend
 from ..gates import tensorize
 from .peps import PEPS
 from .contraction import create_env_cache, contract_with_env, contract_inner
 
 
 class PEPSQuantumRegister(QuantumRegister):
-    def __init__(self, nrow, ncol, backend, threshold=1e-6, rescale=False):
-        self.backend = get_backend(backend)
-        self.state = PEPS.zeros_state(nrow, ncol, self.backend, threshold, rescale)
+    def __init__(self, nrow, ncol, backend, threshold=1e-6):
+        self.backend = tensorbackends.get(backend) if isinstance(backend, str) else backend
+        self.state = PEPS.zeros_state(nrow, ncol, self.backend, threshold)
 
     @property
     def nqubit(self):

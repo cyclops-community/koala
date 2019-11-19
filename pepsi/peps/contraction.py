@@ -8,23 +8,23 @@ import peps
 
 
 def contract_peps(grid):
-    peps_obj = peps.PEPS(grid, insert_pseudo=False, idx_order=[0,3,2,1,4])
+    peps_obj = _create_peps(grid)
     result = peps_obj.contract().match_virtual().reshape(*[2]*grid.shape[0]*grid.shape[1])
     result = np.transpose(result, [i+j*grid.shape[0] for i, j in np.ndindex(*grid.shape)])
     return result
 
 def contract_peps_value(grid):
-    peps_obj = peps.PEPS(grid, insert_pseudo=False, idx_order=[0,3,2,1])
+    peps_obj = _create_scalar_peps(grid)
     return peps_obj.contract()
 
 def contract_inner(this, that):
-    this = peps.PEPS(this, insert_pseudo=False, idx_order=[0,3,2,1,4])
-    that = peps.PEPS(that, insert_pseudo=False, idx_order=[0,3,2,1,4])
+    this = _create_peps(this)
+    that = _create_peps(that)
     return this.inner(that).contract()
 
 
 def create_env_cache(grid):
-    peps_obj = peps.PEPS(grid, insert_pseudo=False, idx_order=[0,3,2,1,4]).norm()
+    peps_obj = _create_peps(grid).norm()
     _up, _down = {}, {}
     for i in range(peps_obj.shape[0]):
         _up[i] = peps_obj[:i].contract_to_MPS() if i != 0 else None
@@ -32,8 +32,8 @@ def create_env_cache(grid):
     return _up, _down
 
 def contract_with_env(this, that, env, up_idx, down_idx):
-    this = peps.PEPS(this, insert_pseudo=False, idx_order=[0,3,2,1,4])
-    that = peps.PEPS(that, insert_pseudo=False, idx_order=[0,3,2,1,4])
+    this = _create_peps(this)
+    that = _create_peps(that)
     inner = this.inner(that)
     up, down = env[0][up_idx], env[1][down_idx]
     if up is None and down is None:
@@ -45,3 +45,16 @@ def contract_with_env(this, that, env, up_idx, down_idx):
     else:
         peps_obj = up.concatenate(inner).concatenate(down)
     return peps_obj.contract()
+
+
+def _create_peps(grid):
+    return peps.PEPS(_unwrap(grid), insert_pseudo=False, idx_order=[0,3,2,1,4])
+
+def _create_scalar_peps(grid):
+    return peps.PEPS(_unwrap(grid), insert_pseudo=False, idx_order=[0,3,2,1])
+
+def _unwrap(grid):
+    newgrid = np.empty_like(grid)
+    for idx, tsr in np.ndenumerate(grid):
+        newgrid[idx] = tsr.unwrap()
+    return newgrid

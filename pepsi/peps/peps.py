@@ -13,28 +13,27 @@ from .contraction import contract_peps, contract_peps_value, contract_inner
 
 
 class PEPS:
-    def __init__(self, grid, backend, threshold, rescale):
+    def __init__(self, grid, backend, threshold):
         self.backend = backend
         self.grid = grid
         self.threshold = threshold
-        self.rescale = rescale
 
     @staticmethod
-    def zeros_state(nrow, ncol, backend, threshold=None, rescale=True):
+    def zeros_state(nrow, ncol, backend, threshold=None):
         grid = np.empty((nrow, ncol), dtype=object)
         for i, j in np.ndindex(nrow, ncol):
             grid[i, j] = backend.astensor(np.array([1,0],dtype=complex).reshape(1,1,1,1,2))
-        return PEPS(grid, backend, threshold, rescale)
+        return PEPS(grid, backend, threshold)
 
     @staticmethod
-    def ones_state(nrow, ncol, backend, threshold=None, rescale=True):
+    def ones_state(nrow, ncol, backend, threshold=None):
         grid = np.empty((nrow, ncol), dtype=object)
         for i, j in np.ndindex(nrow, ncol):
             grid[i, j] = backend.astensor(np.array([0,1],dtype=complex).reshape(1,1,1,1,2))
-        return PEPS(grid, backend, threshold, rescale)
+        return PEPS(grid, backend, threshold)
 
     @staticmethod
-    def bits_state(bits, backend, threshold=None, rescale=True):
+    def bits_state(bits, backend, threshold=None):
         bits = np.asarray(bits)
         if bits.ndim != 2:
             raise ValueError('Initial bits must be a 2-d array')
@@ -43,7 +42,7 @@ class PEPS:
             grid[i, j] = backend.astensor(
                 np.array([0,1] if bits[i,j] else [1,0],dtype=complex).reshape(1,1,1,1,2)
             )
-        return PEPS(grid, backend, threshold, rescale)
+        return PEPS(grid, backend, threshold)
 
     @property
     def nrow(self):
@@ -60,14 +59,14 @@ class PEPS:
     def copy(self):
         grid = np.empty_like(self.grid)
         for idx, tensor in np.ndenumerate(self.grid):
-            grid[idx] = self.backend.copy(tensor)
-        return PEPS(grid, self.backend, self.threshold, self.rescale)
+            grid[idx] = tensor.copy()
+        return PEPS(grid, self.backend, self.threshold)
 
     def conjugate(self):
         grid = np.empty_like(self.grid)
         for idx, tensor in np.ndenumerate(self.grid):
-            grid[idx] = self.backend.conjugate(tensor)
-        return PEPS(grid, self.backend, self.threshold, self.rescale)
+            grid[idx] = tensor.conj()
+        return PEPS(grid, self.backend, self.threshold)
 
     def apply_operator(self, tensor, positions):
         if len(positions) == 1:
@@ -121,9 +120,14 @@ class PEPS:
         u_terms = ''.join(chars[i] for i in u_inds)
         v_terms = ''.join(chars[i] for i in v_inds)
         einstr = f'{prod_terms}->{u_terms},{v_terms}'
-        u, _, v = self.backend.einsvd(einstr, prod, criterion=2, threshold=self.threshold, mult_s=True, rescale=self.rescale)
+        u, s, v = self.backend.einsvd(einstr, prod)
+        u, s, v = truncate(self.backend, u, s, v, u_inds.index(link0), v_inds.index(link0), threshold=self.threshold)
+        s = s ** 0.5
+        u = self.backend.einsum(f'{u_terms},{chars[link0]}->{u_terms}', u, s)
+        v = self.backend.einsum(f'{v_terms},{chars[link0]}->{v_terms}', v, s)
         self.grid[positions[0]] = u
         self.grid[positions[1]] = v
+
 
     def norm(self):
         return sqrt(np.real_if_close(self.inner(self)))
@@ -136,7 +140,7 @@ class PEPS:
             return self
         else:
             return NotImplemented
-    
+
     def __itruediv__(self, a):
         if isinstance(a, Number):
             divider = a ** (1/(self.nrow * self.ncol))
@@ -195,3 +199,13 @@ def get_link(p, q):
 def is_two_local(p, q):
     dx, dy = abs(q[0] - p[0]), abs(q[1] - p[1])
     return dx == 1 and dy == 0 or dx == 0 and dy == 1
+
+
+def truncate(backend, u, s, v, u_axis, v_axis, threshold=None):
+    if threshold is None: threshold = 1.0
+    residual = backend.norm(s) * threshold
+    rank = max(next(r for r in range(s.shape[0], 0, -1) if backend.norm(s[r-1:]) >= residual), 0)
+    u_slice = tuple(slice(None) if i != u_axis else slice(rank) for i in range(u.ndim))
+    v_slice = tuple(slice(None) if i != v_axis else slice(rank) for i in range(v.ndim))
+    s_slice = slice(rank)
+    return u[u_slice], s[s_slice], v[s_slice]
