@@ -67,16 +67,17 @@ class StateVectorQuantumRegister(QuantumRegister):
         einstr = f'{all_terms},{all_terms}->'
         for tensor, qubits in observable:
             state = self.state.copy()
-            state = apply_operator(self.backend, state, self.backend.astensor(tensor), qubits)
+            state = apply_operator(self.backend, state, tensor, qubits)
             e += np.real_if_close(self.backend.einsum(einstr, state, self.state.conj()))
         return e
 
     def probabilities(self):
         prob_vector = np.real(self.state)**2 + np.imag(self.state)**2
-        return [(index, a) for index, a in np.ndenumerate(state) if not np.isclose(a.conj()*a,0)]
+        return [(index, a) for index, a in np.ndenumerate(self.state) if not np.isclose(a.conj()*a,0)]
 
 
 def apply_operator(backend, state, operator, axes):
+    operator = backend.astensor(operator)
     ndim = state.ndim
     input_state_indices = range(ndim)
     operator_indices = [*axes, *range(ndim, ndim+len(axes))]

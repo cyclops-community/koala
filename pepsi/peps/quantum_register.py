@@ -34,6 +34,7 @@ class PEPSQuantumRegister(QuantumRegister):
             self.apply_gate(gate)
 
     def apply_operator(self, operator, qubits):
+        operator = self.backend.astensor(operator)
         postitons = [self._qubit_position(qubit) for qubit in qubits]
         self.state.apply_operator(operator, postitons)
 

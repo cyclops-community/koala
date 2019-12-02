@@ -239,7 +239,7 @@ def truncate(backend, u, s, v, u_axis, v_axis, threshold=None):
     u_slice = tuple(slice(None) if i != u_axis else slice(rank) for i in range(u.ndim))
     v_slice = tuple(slice(None) if i != v_axis else slice(rank) for i in range(v.ndim))
     s_slice = slice(rank)
-    return u[u_slice], s[s_slice], v[s_slice]
+    return u[u_slice], s[s_slice], v[v_slice]
 
 
 def tn_add(backend, a, b, internal_bonds, external_bonds):
