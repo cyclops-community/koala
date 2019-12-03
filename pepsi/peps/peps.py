@@ -150,12 +150,6 @@ class PEPS(QuantumState):
             ))
         return e
 
-    def measure(self, positions):
-        result = self.peak(positions, 1)[0]
-        for pos, val in zip(positions, result):
-            self.apply_operator_one(np.array([[1-val,0],[0,val]]), pos)
-        return result
-
     def contract(self):
         return contract.to_statevector(self.grid)
 
