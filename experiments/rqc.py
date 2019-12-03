@@ -1,7 +1,9 @@
+import argparse
 from collections import namedtuple
 
 import numpy as np
-import numpy.linalg as la
+
+from pepsi import PEPSQuantumRegister
 
 Circuit = namedtuple('Circuit', ['gates', 'nrow', 'ncol', 'nlayer', 'two_qubit_gate_name', 'seed'])
 Gate = namedtuple('Gate', ['name', 'parameters', 'qubits'])
@@ -37,3 +39,30 @@ def generate(nrow, ncol, nlayer, seed):
         add_one_qubit_gates()
         add_two_qubit_gates(pairs[[0,1,2,3,2,3,0,1][i%8]])
     return Circuit(gates, nrow, ncol, nlayer, two_qubit_gate_name, seed)
+
+
+def main(args):
+    circuit = generate(args.nrow, args.ncol, args.nlayer, args.seed)
+    # TODO run simulator and collect data
+    from contextlib import redirect_stdout
+    with open(args.output_file, 'w+') as f, redirect_stdout(f):
+        for gate in circuit.gates:
+            print(gate)
+
+
+def build_cli_parser():
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('-r', '--nrow', help='the number of rows', type=int)
+    parser.add_argument('-c', '--ncol', help='the number of columns', type=int)
+    parser.add_argument('-l', '--nlayer', help='the number of layers', type=int)
+    parser.add_argument('-s', '--seed', help='random circuit seed', type=int, default=0)
+
+    parser.add_argument('-o', '--output-file', help='output file path')
+
+    return parser
+
+
+if __name__ == '__main__':
+    parser = build_cli_parser()
+    main(parser.parse_args())
