@@ -1,25 +1,28 @@
 """
-This module defines the interface of a quantum register.
+This module defines the interface of a quantum state.
 """
 
-class QuantumRegister:
+class QuantumState:
     @property
-    def nqubit(self):
+    def nsite(self):
+        raise NotImplementedError()
+
+    def copy(self):
+        raise NotImplementedError()
+
+    def norm(self):
+        raise NotImplementedError()
+
+    def conjugate(self):
         raise NotImplementedError()
 
     def apply_gate(self, gate):
         raise NotImplementedError()
 
-    def apply_circuit(self, circuit):
+    def apply_circuit(self, gates):
         raise NotImplementedError()
 
-    def apply_operator(self, operator, qubits):
-        raise NotImplementedError()
-
-    def normalize(self):
-        raise NotImplementedError()
-
-    def norm(self):
+    def apply_operator(self, operator, sites):
         raise NotImplementedError()
 
     def __imul__(self, a):
@@ -28,16 +31,10 @@ class QuantumRegister:
     def __itruediv__(self, a):
         raise NotImplementedError()
 
-    def measure(self, qubits):
+    def amplitude(self, indices):
         raise NotImplementedError()
 
-    def sample(self, qubits, k):
-        raise NotImplementedError()
-
-    def amplitude(self, bits):
-        raise NotImplementedError()
-
-    def probability(self, bits):
+    def probability(self, indices):
         raise NotImplementedError()
 
     def expectation(self, observable):

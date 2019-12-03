@@ -8,41 +8,17 @@ from numbers import Number
 from string import ascii_letters as chars
 
 import numpy as np
+import tensorbackends
 
-from .contraction import contract_peps, contract_peps_value, contract_inner
+from ..quantum_state import QuantumState
+from ..gates import tensorize
+from .contraction import contract_peps, contract_peps_value, contract_inner, create_env_cache, contract_with_env
 
 
-class PEPS:
-    def __init__(self, grid, backend, threshold):
-        self.backend = backend
+class PEPS(QuantumState):
+    def __init__(self, grid, backend):
+        self.backend = tensorbackends.get(backend)
         self.grid = grid
-        self.threshold = threshold
-
-    @staticmethod
-    def zeros_state(nrow, ncol, backend, threshold=None):
-        grid = np.empty((nrow, ncol), dtype=object)
-        for i, j in np.ndindex(nrow, ncol):
-            grid[i, j] = backend.astensor(np.array([1,0],dtype=complex).reshape(1,1,1,1,2))
-        return PEPS(grid, backend, threshold)
-
-    @staticmethod
-    def ones_state(nrow, ncol, backend, threshold=None):
-        grid = np.empty((nrow, ncol), dtype=object)
-        for i, j in np.ndindex(nrow, ncol):
-            grid[i, j] = backend.astensor(np.array([0,1],dtype=complex).reshape(1,1,1,1,2))
-        return PEPS(grid, backend, threshold)
-
-    @staticmethod
-    def bits_state(bits, backend, threshold=None):
-        bits = np.asarray(bits)
-        if bits.ndim != 2:
-            raise ValueError('Initial bits must be a 2-d array')
-        grid = np.empty_like(bits, dtype=object)
-        for i, j in np.ndindex(*bits.shape):
-            grid[i, j] = backend.astensor(
-                np.array([0,1] if bits[i,j] else [1,0],dtype=complex).reshape(1,1,1,1,2)
-            )
-        return PEPS(grid, backend, threshold)
 
     @property
     def nrow(self):
@@ -56,42 +32,77 @@ class PEPS:
     def shape(self):
         return self.grid.shape
 
-    def __getitem__(self, ind):
-        return self.grid[ind]
-    
-    def __setitem__(self, ind, site):
-        self.grid[ind] = site
-    
+    @property
+    def nsite(self):
+        return self.nrow * self.ncol
+
+    def __getitem__(self, position):
+        return self.grid[position]
+
     def copy(self):
         grid = np.empty_like(self.grid)
         for idx, tensor in np.ndenumerate(self.grid):
             grid[idx] = tensor.copy()
-        return PEPS(grid, self.backend, self.threshold)
+        return PEPS(grid, self.backend)
 
     def conjugate(self):
         grid = np.empty_like(self.grid)
         for idx, tensor in np.ndenumerate(self.grid):
             grid[idx] = tensor.conj()
-        return PEPS(grid, self.backend, self.threshold)
+        return PEPS(grid, self.backend)
 
-    def apply_operator(self, tensor, positions):
+    def apply_gate(self, gate, threshold=None):
+        tensor = tensorize(self.backend, gate.name, *gate.parameters)
+        self.apply_operator(tensor, gate.qubits, threshold=threshold)
+
+    def apply_circuit(self, gates, threshold=None):
+        for gate in gates:
+            self.apply_gate(gate, threshold=threshold)
+
+    def apply_operator(self, operator, sites, threshold=None):
+        operator = self.backend.astensor(operator)
+        positions = [divmod(site, self.ncol) for site in sites]
         if len(positions) == 1:
-            self.apply_operator_one(tensor, positions[0])
+            self.apply_operator_one(operator, positions[0])
         elif len(positions) == 2 and is_two_local(*positions):
-            self.apply_operator_two_local(tensor, positions)
+            self.apply_operator_two_local(operator, positions, threshold)
         else:
             raise ValueError('nonlocal operator is not supported')
 
-    def apply_operator_one(self, tensor, position):
-        """Apply a single qubit gate at given position."""
-        self.grid[position] = self.backend.einsum('ijklx,xy->ijkly', self.grid[position], tensor)
+    def __add__(self, other):
+        if isinstance(other, PEPS):
+            return self.add(other)
+        else:
+            return NotImplemented
 
-    def apply_operator_two_local(self, tensor, positions):
+    def __imul__(self, a):
+        if isinstance(a, Number):
+            multiplier = a ** (1/(self.nrow * self.ncol))
+            for idx in np.ndindex(*self.shape):
+                self.grid[idx] *= multiplier
+            return self
+        else:
+            return NotImplemented
+
+    def __itruediv__(self, a):
+        if isinstance(a, Number):
+            divider = a ** (1/(self.nrow * self.ncol))
+            for idx in np.ndindex(*self.shape):
+                self.grid[idx] /= divider
+            return self
+        else:
+            return NotImplemented
+
+    def apply_operator_one(self, operator, position):
+        """Apply a single qubit gate at given position."""
+        self.grid[position] = self.backend.einsum('ijklx,xy->ijkly', self.grid[position], operator)
+
+    def apply_operator_two_local(self, operator, positions, threshold):
         """Apply a two qubit gate to given positions."""
         assert len(positions) == 2
         sites = [self.grid[p] for p in positions]
 
-        # contract sites into gate tensor
+        # contract sites into operator
         site_inds = range(5)
         gate_inds = range(4,4+4)
         result_inds = [*range(4), *range(5,8)]
@@ -100,7 +111,7 @@ class PEPS:
         gate_terms = ''.join(chars[i] for i in gate_inds)
         result_terms = ''.join(chars[i] for i in result_inds)
         einstr = f'{site_terms},{gate_terms}->{result_terms}'
-        prod = self.backend.einsum(einstr, sites[0], tensor)
+        prod = self.backend.einsum(einstr, sites[0], operator)
 
         link0, link1 = get_link(positions[0], positions[1])
         gate_inds = range(7)
@@ -127,40 +138,15 @@ class PEPS:
         v_terms = ''.join(chars[i] for i in v_inds)
         einstr = f'{prod_terms}->{u_terms},{v_terms}'
         u, s, v = self.backend.einsvd(einstr, prod)
-        u, s, v = truncate(self.backend, u, s, v, u_inds.index(link0), v_inds.index(link0), threshold=self.threshold)
+        u, s, v = truncate(self.backend, u, s, v, u_inds.index(link0), v_inds.index(link0), threshold=threshold)
         s = s ** 0.5
         u = self.backend.einsum(f'{u_terms},{chars[link0]}->{u_terms}', u, s)
         v = self.backend.einsum(f'{v_terms},{chars[link0]}->{v_terms}', v, s)
         self.grid[positions[0]] = u
         self.grid[positions[1]] = v
 
-
     def norm(self):
         return sqrt(np.real_if_close(self.inner(self)))
-
-    def __add__(self, other):
-        if isinstance(other, PEPS):
-            return self.add(other)
-        else:
-            return NotImplemented
-
-    def __imul__(self, a):
-        if isinstance(a, Number):
-            multiplier = a ** (1/(self.nrow * self.ncol))
-            for idx in np.ndindex(*self.shape):
-                self.grid[idx] *= multiplier
-            return self
-        else:
-            return NotImplemented
-
-    def __itruediv__(self, a):
-        if isinstance(a, Number):
-            divider = a ** (1/(self.nrow * self.ncol))
-            for idx in np.ndindex(*self.shape):
-                self.grid[idx] /= divider
-            return self
-        else:
-            return NotImplemented
 
     def add(self, other):
         """
@@ -177,8 +163,44 @@ class PEPS:
             (external_bonds if i == self.shape[0] - 1 else internal_bonds).append(2)
             (external_bonds if j == self.shape[1] - 1 else internal_bonds).append(3)
             grid[i, j] = tn_add(self.backend, self[i, j], other[i, j], internal_bonds, external_bonds)
-        return PEPS(grid, self.backend, self.threshold)
+        return PEPS(grid, self.backend)
 
+    def amplitude(self, indices):
+        if len(indices) != self.nsite:
+            raise ValueError('indices number and sites number do not match')
+        indices = np.array(indices).reshape(*self.shape)
+        grid = np.empty_like(self.grid, dtype=object)
+        zero = self.backend.astensor(np.array([1,0], dtype=complex))
+        one = self.backend.astensor(np.array([0,1], dtype=complex))
+        for i, j in np.ndindex(*self.shape):
+            grid[i, j] = self.backend.einsum('ijklx,x->ijkl', self.grid[i,j], one if indices[i,j] else zero)
+        return contract_peps_value(grid)
+
+    def probability(self, indices):
+        return np.abs(self.amplitude(indices))**2
+
+    def expectation(self, observable, use_cache=False):
+        if use_cache:
+            return self._expectation_with_cache(observable)
+        e = 0
+        for tensor, sites in observable:
+            other = self.copy()
+            other.apply_operator(self.backend.astensor(tensor), sites)
+            e += np.real_if_close(self.inner(other))
+        return e
+
+    def _expectation_with_cache(self, observable):
+        env = create_env_cache(self.grid)
+        e = 0
+        for tensor, sites in observable:
+            other = self.copy()
+            other.apply_operator(self.backend.astensor(tensor), sites)
+            rows = [site // self.ncol for site in sites]
+            up, down = min(rows), max(rows)
+            e += np.real_if_close(contract_with_env(
+                other.grid[up:down+1], self.grid[up:down+1], env, up, down
+            ))
+        return e
 
     def measure(self, positions):
         result = self.peak(positions, 1)[0]
@@ -186,29 +208,11 @@ class PEPS:
             self.apply_operator_one(np.array([[1-val,0],[0,val]]), pos)
         return result
 
-    def peak(self, positions, nsample):
-        prob = contract_peps(self.grid)
-        np.absolute(prob, out=prob) # to save memory
-        prob **= 2 # to save memory
-        ndigits = len(prob)
-        to_binary = lambda n: np.array([int(d) for d in f'{n:0{ndigits}b}'])
-        positions_array = [i*self.ncol+j for i, j in positions]
-        return [to_binary(n)[positions_array] for n in random.choices(range(len(prob)), weights=prob, k=nsample)]
-
-    def get_amplitude(self, bits):
-        grid = np.empty_like(self.grid, dtype=object)
-        zero = self.backend.astensor(np.array([1,0], dtype=complex))
-        one = self.backend.astensor(np.array([0,1], dtype=complex))
-        for i, j in np.ndindex(*self.shape):
-            grid[i, j] = self.backend.einsum('ijklx,x->ijkl', self.grid[i,j], one if bits[i,j] else zero)
-        return contract_peps_value(grid)
-
     def contract(self):
         return contract_peps(self.grid)
 
     def inner(self, peps):
         return contract_inner(self.grid, peps.grid)
-# end class PEPS
 
 
 def get_link(p, q):
@@ -233,7 +237,7 @@ def is_two_local(p, q):
 
 
 def truncate(backend, u, s, v, u_axis, v_axis, threshold=None):
-    if threshold is None: threshold = 1.0
+    if threshold is None: threshold = 0.0
     residual = backend.norm(s) * threshold
     rank = max(next(r for r in range(s.shape[0], 0, -1) if backend.norm(s[r-1:]) >= residual), 0)
     u_slice = tuple(slice(None) if i != u_axis else slice(rank) for i in range(u.ndim))
