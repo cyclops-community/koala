@@ -12,7 +12,7 @@ import tensorbackends
 
 from ..quantum_state import QuantumState
 from ..gates import tensorize
-from .contraction import contract_peps, contract_peps_value, contract_inner, create_env_cache, contract_with_env
+from . import contract, update
 
 
 class PEPS(QuantumState):
@@ -63,9 +63,9 @@ class PEPS(QuantumState):
         operator = self.backend.astensor(operator)
         positions = [divmod(site, self.ncol) for site in sites]
         if len(positions) == 1:
-            self.apply_operator_one(operator, positions[0])
+            update.apply_single_site_operator(self, operator, positions[0])
         elif len(positions) == 2 and is_two_local(*positions):
-            self.apply_operator_two_local(operator, positions, threshold)
+            update.apply_local_pair_operator(self, operator, positions, threshold)
         else:
             raise ValueError('nonlocal operator is not supported')
 
@@ -92,58 +92,6 @@ class PEPS(QuantumState):
             return self
         else:
             return NotImplemented
-
-    def apply_operator_one(self, operator, position):
-        """Apply a single qubit gate at given position."""
-        self.grid[position] = self.backend.einsum('ijklx,xy->ijkly', self.grid[position], operator)
-
-    def apply_operator_two_local(self, operator, positions, threshold):
-        """Apply a two qubit gate to given positions."""
-        assert len(positions) == 2
-        sites = [self.grid[p] for p in positions]
-
-        # contract sites into operator
-        site_inds = range(5)
-        gate_inds = range(4,4+4)
-        result_inds = [*range(4), *range(5,8)]
-
-        site_terms = ''.join(chars[i] for i in site_inds)
-        gate_terms = ''.join(chars[i] for i in gate_inds)
-        result_terms = ''.join(chars[i] for i in result_inds)
-        einstr = f'{site_terms},{gate_terms}->{result_terms}'
-        prod = self.backend.einsum(einstr, sites[0], operator)
-
-        link0, link1 = get_link(positions[0], positions[1])
-        gate_inds = range(7)
-        site_inds = [*range(7, 7+4), 4]
-        site_inds[link1] = link0
-
-        middle = [*range(7, 7+link1), *range(link1+8, 7+4)]
-        left = [*range(link0), *range(link0+1,4)]
-        right = range(5, 7)
-        result_inds = [*left, *middle, *right]
-
-        site_terms = ''.join(chars[i] for i in site_inds)
-        gate_terms = ''.join(chars[i] for i in gate_inds)
-        result_terms = ''.join(chars[i] for i in result_inds)
-        einstr = f'{site_terms},{gate_terms}->{result_terms}'
-        prod = self.backend.einsum(einstr, sites[1], prod)
-
-        # svd split sites
-        prod_inds = [*left, *middle, *right]
-        u_inds = [*range(link0), link0, *range(link0+1,4), 5]
-        v_inds = [*range(7, 7+link1), link0, *range(link1+8, 7+4), 6]
-        prod_terms = ''.join(chars[i] for i in prod_inds)
-        u_terms = ''.join(chars[i] for i in u_inds)
-        v_terms = ''.join(chars[i] for i in v_inds)
-        einstr = f'{prod_terms}->{u_terms},{v_terms}'
-        u, s, v = self.backend.einsvd(einstr, prod)
-        u, s, v = truncate(self.backend, u, s, v, u_inds.index(link0), v_inds.index(link0), threshold=threshold)
-        s = s ** 0.5
-        u = self.backend.einsum(f'{u_terms},{chars[link0]}->{u_terms}', u, s)
-        v = self.backend.einsum(f'{v_terms},{chars[link0]}->{v_terms}', v, s)
-        self.grid[positions[0]] = u
-        self.grid[positions[1]] = v
 
     def norm(self):
         return sqrt(np.real_if_close(self.inner(self)))
@@ -174,7 +122,7 @@ class PEPS(QuantumState):
         one = self.backend.astensor(np.array([0,1], dtype=complex))
         for i, j in np.ndindex(*self.shape):
             grid[i, j] = self.backend.einsum('ijklx,x->ijkl', self.grid[i,j], one if indices[i,j] else zero)
-        return contract_peps_value(grid)
+        return contract.to_value(grid)
 
     def probability(self, indices):
         return np.abs(self.amplitude(indices))**2
@@ -190,14 +138,14 @@ class PEPS(QuantumState):
         return e
 
     def _expectation_with_cache(self, observable):
-        env = create_env_cache(self.grid)
+        env = contract.create_env_cache(self.grid)
         e = 0
         for tensor, sites in observable:
             other = self.copy()
             other.apply_operator(self.backend.astensor(tensor), sites)
             rows = [site // self.ncol for site in sites]
             up, down = min(rows), max(rows)
-            e += np.real_if_close(contract_with_env(
+            e += np.real_if_close(contract.inner_with_env(
                 other.grid[up:down+1], self.grid[up:down+1], env, up, down
             ))
         return e
@@ -209,41 +157,10 @@ class PEPS(QuantumState):
         return result
 
     def contract(self):
-        return contract_peps(self.grid)
+        return contract.to_statevector(self.grid)
 
     def inner(self, peps):
-        return contract_inner(self.grid, peps.grid)
-
-
-def get_link(p, q):
-    if not is_two_local(p, q):
-        raise ValueError(f'No link between {p} and {q}')
-    dx, dy = q[0] - p[0], q[1] - p[1]
-    if (dx, dy) == (0, 1):
-        return (3, 1)
-    elif (dx, dy) == (0, -1):
-        return (1, 3)
-    elif (dx, dy) == (1, 0):
-        return (2, 0)
-    elif (dx, dy) == (-1, 0):
-        return (0, 2)
-    else:
-        assert False
-
-
-def is_two_local(p, q):
-    dx, dy = abs(q[0] - p[0]), abs(q[1] - p[1])
-    return dx == 1 and dy == 0 or dx == 0 and dy == 1
-
-
-def truncate(backend, u, s, v, u_axis, v_axis, threshold=None):
-    if threshold is None: threshold = 0.0
-    residual = backend.norm(s) * threshold
-    rank = max(next(r for r in range(s.shape[0], 0, -1) if backend.norm(s[r-1:]) >= residual), 0)
-    u_slice = tuple(slice(None) if i != u_axis else slice(rank) for i in range(u.ndim))
-    v_slice = tuple(slice(None) if i != v_axis else slice(rank) for i in range(v.ndim))
-    s_slice = slice(rank)
-    return u[u_slice], s[s_slice], v[v_slice]
+        return contract.inner(self.grid, peps.grid)
 
 
 def tn_add(backend, a, b, internal_bonds, external_bonds):
@@ -264,3 +181,8 @@ def tn_add(backend, a, b, internal_bonds, external_bonds):
     c[a_ind] += a
     c[b_ind] += b
     return c
+
+
+def is_two_local(p, q):
+    dx, dy = abs(q[0] - p[0]), abs(q[1] - p[1])
+    return dx == 1 and dy == 0 or dx == 0 and dy == 1
