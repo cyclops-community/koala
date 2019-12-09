@@ -52,6 +52,31 @@ def apply_local_pair_operator(state, operator, positions, threshold):
     state.grid[positions[1]] = v
 
 
+def apply_low_rank_update(backend, environment, right_side, rank):
+    """
+    Update sites based on low rank constrained least square:
+    Inputs:
+        backend: the backend library to be used
+        environment: 4-d tensor
+        right_side: 4-d tensor
+        rank: the rank of each returned site
+    Output:
+        array including updated sites
+    """
+    length = environment.shape[0]
+    environment = environment.reshape((length * length, length * length))
+    right_side = right_side.reshape((length * length, length * length))
+    R_inv = backend.inv(backend.transpose(backend.cholesky(environment)))
+    B = backend.matmul(right_side, R_inv)
+    U, s, VT = backend.svd(B)
+    return [
+        backend.matmul(U[:, :rank], backend.diag(s[:rank])).reshape(
+            (length, length, rank)),
+        backend.matmul(R_inv, backend.transpose(VT[:rank, :])).reshape(
+            (length, length, rank))
+    ]
+
+
 def get_link(p, q):
     dx, dy = q[0] - p[0], q[1] - p[1]
     if (dx, dy) == (0, 1):
