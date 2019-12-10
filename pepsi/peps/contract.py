@@ -7,17 +7,17 @@ import numpy as np
 import peps
 
 
-def contract_peps(grid):
+def to_statevector(grid):
     peps_obj = _create_peps(grid)
     result = peps_obj.contract().match_virtual().reshape(*[2]*grid.shape[0]*grid.shape[1])
     result = np.transpose(result, [i+j*grid.shape[0] for i, j in np.ndindex(*grid.shape)])
     return result
 
-def contract_peps_value(grid):
+def to_value(grid):
     peps_obj = _create_scalar_peps(grid)
     return peps_obj.contract()
 
-def contract_inner(this, that):
+def inner(this, that):
     this = _create_peps(this)
     that = _create_peps(that)
     return this.inner(that).contract()
@@ -31,7 +31,7 @@ def create_env_cache(grid):
         _down[i] = peps_obj[i+1:].contract_to_MPS() if i != grid.shape[0] - 1 else None
     return _up, _down
 
-def contract_with_env(this, that, env, up_idx, down_idx):
+def inner_with_env(this, that, env, up_idx, down_idx):
     this = _create_peps(this)
     that = _create_peps(that)
     inner = this.inner(that)
