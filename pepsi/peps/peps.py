@@ -70,8 +70,14 @@ class PEPS(QuantumState):
             raise ValueError('nonlocal operator is not supported')
 
     def __add__(self, other):
-        if isinstance(other, PEPS):
+        if isinstance(other, PEPS) and self.backend == other.backend:
             return self.add(other)
+        else:
+            return NotImplemented
+
+    def __sub__(self, other):
+        if isinstance(other, PEPS) and self.backend == other.backend:
+            return self.add(other, coeff=-1.0)
         else:
             return NotImplemented
 
@@ -96,7 +102,7 @@ class PEPS(QuantumState):
     def norm(self):
         return sqrt(np.real_if_close(self.inner(self)))
 
-    def add(self, other):
+    def add(self, other, *, coeff=1.0):
         """
         Add two PEPS of the same grid shape and return the sum as a third PEPS also with the same grid shape.
         """
@@ -110,7 +116,7 @@ class PEPS(QuantumState):
             (external_bonds if j == 0 else internal_bonds).append(1)
             (external_bonds if i == self.shape[0] - 1 else internal_bonds).append(2)
             (external_bonds if j == self.shape[1] - 1 else internal_bonds).append(3)
-            grid[i, j] = tn_add(self.backend, self[i, j], other[i, j], internal_bonds, external_bonds)
+            grid[i, j] = tn_add(self.backend, self[i, j], other[i, j], internal_bonds, external_bonds, 1, coeff)
         return PEPS(grid, self.backend)
 
     def amplitude(self, indices):
@@ -151,13 +157,17 @@ class PEPS(QuantumState):
         return e
 
     def contract(self):
-        return contract.to_statevector(self.grid)
+        return self.backend.tensor(contract.to_statevector(self.grid))
 
     def inner(self, peps):
         return contract.inner(self.grid, peps.grid)
 
+    def statevector(self):
+        from .. import statevector
+        return statevector.StateVector(self.contract(), self.backend)
 
-def tn_add(backend, a, b, internal_bonds, external_bonds):
+
+def tn_add(backend, a, b, internal_bonds, external_bonds, coeff_a, coeff_b):
     """
     Helper function for addition of two tensor network states with the same structure. 
     Add two site from two tensor network states respecting specified inner and external bond structure. 
@@ -172,8 +182,8 @@ def tn_add(backend, a, b, internal_bonds, external_bonds):
     a_ind = tuple([slice(lim[i]) for i in range(ndim)])
     b_ind = tuple([slice(lim[i], None) for i in range(ndim)])
     c = backend.zeros(shape_c, dtype=a.dtype)
-    c[a_ind] += a
-    c[b_ind] += b
+    c[a_ind] += a * coeff_a
+    c[b_ind] += b * coeff_b
     return c
 
 
