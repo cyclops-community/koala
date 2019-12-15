@@ -41,20 +41,6 @@ class StateVector(QuantumState):
     def norm(self):
         return self.backend.norm(self.tensor)
 
-    def __imul__(self, a):
-        if isinstance(a, Number):
-            self.tensor *= a
-            return self
-        else:
-            return NotImplemented
-
-    def __itruediv__(self, a):
-        if isinstance(a, Number):
-            self.tensor /= a
-            return self
-        else:
-            return NotImplemented
-
     def amplitude(self, indices):
         if len(indices) != self.nsite:
             raise ValueError('indices number and sites number do not match')
@@ -77,6 +63,11 @@ class StateVector(QuantumState):
         prob_vector = np.real(self.tensor)**2 + np.imag(self.tensor)**2
         return [(index, a) for index, a in np.ndenumerate(self.tensor) if not np.isclose(a.conj()*a,0)]
 
+    def inner(self, other):
+        terms = ''.join(chars[i] for i in range(self.nsite))
+        subscripts = terms + ',' + terms + '->'
+        return self.backend.einsum(subscripts, self.tensor.conj(), other.tensor)
+
 
 def apply_operator(backend, state_tensor, operator, axes):
     operator = backend.astensor(operator)
@@ -91,3 +82,58 @@ def apply_operator(backend, state_tensor, operator, axes):
     output_terms = ''.join(chars[i] for i in output_state_indices)
     einstr = f'{input_terms},{operator_terms}->{output_terms}'
     return backend.einsum(einstr, state_tensor, operator)
+
+
+def inherit_unary_operators(*operator_names):
+    def add_unary_operator(operator_name):
+        def method(self):
+            return StateVector(getattr(self.tensor, operator_name)(), self.backend)
+        method.__module__ = StateVector.__module__
+        method.__qualname__ = '{}.{}'.format(StateVector.__qualname__, operator_name)
+        method.__name__ = operator_name
+        setattr(StateVector, operator_name, method)
+    for op_name in operator_names:
+        add_unary_operator(op_name)
+
+
+def inherit_binary_operators(*operator_names):
+    def add_binary_operator(operator_name):
+        def method(self, other):
+            if isinstance(other, StateVector) and self.backend == other.backend:
+                return StateVector(getattr(self.tensor, operator_name)(other.tensor), self.backend)
+            elif isinstance(other, Number):
+                return StateVector(getattr(self.tensor, operator_name)(other), self.backend)
+            else:
+                return NotImplemented
+        method.__module__ = StateVector.__module__
+        method.__qualname__ = '{}.{}'.format(StateVector.__qualname__, operator_name)
+        method.__name__ = operator_name
+        setattr(StateVector, operator_name, method)
+    for op_name in operator_names:
+        add_binary_operator(op_name)
+
+
+inherit_unary_operators(
+    '__pos__',
+    '__neg__',
+)
+
+inherit_binary_operators(
+    '__add__',
+    '__sub__',
+    '__mul__',
+    '__truediv__',
+    '__pow__',
+
+    '__radd__',
+    '__rsub__',
+    '__rmul__',
+    '__rtruediv__',
+    '__rpow__',
+
+    '__iadd__',
+    '__isub__',
+    '__imul__',
+    '__itruediv__',
+    '__ipow__',
+)
