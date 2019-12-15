@@ -1,9 +1,12 @@
-import argparse
+import argparse, time
 from collections import namedtuple
+from contextlib import redirect_stdout
 
 import numpy as np
 
-from pepsi import PEPSQuantumRegister
+import tensorbackends
+import pepsi.statevector
+import pepsi.peps
 
 Circuit = namedtuple('Circuit', ['gates', 'nrow', 'ncol', 'nlayer', 'two_qubit_gate_name', 'seed'])
 Gate = namedtuple('Gate', ['name', 'parameters', 'qubits'])
@@ -41,24 +44,71 @@ def generate(nrow, ncol, nlayer, seed):
     return Circuit(gates, nrow, ncol, nlayer, two_qubit_gate_name, seed)
 
 
+def run_statevector(circuit, backend):
+    qstate = pepsi.statevector.computational_zeros(circuit.nrow*circuit.ncol, backend=backend)
+    qstate.apply_circuit(circuit.gates)
+    return qstate
+
+def run_peps(circuit, threshold, backend):
+    qstate = pepsi.peps.computational_zeros(circuit.nrow, circuit.ncol, backend=backend)
+    qstate.apply_circuit(circuit.gates, threshold=threshold)
+    return qstate
+
+
+
 def main(args):
     circuit = generate(args.nrow, args.ncol, args.nlayer, args.seed)
-    # TODO run simulator and collect data
-    from contextlib import redirect_stdout
+
+    t = time.process_time()
+    qstate_true = run_statevector(circuit, backend=args.backend)
+    statevector_time = time.process_time() - t
+
+    t = time.process_time()
+    qstate_peps = run_peps(circuit, backend=args.backend, threshold=args.threshold)
+    peps_time = time.process_time() - t
+
+    t = time.process_time()
+    qstate = qstate_peps.statevector()
+    contraction_time = time.process_time() - t
+
+    t = time.process_time()
+    fidelity = np.abs(qstate.inner(qstate_true))**2
+    fidelity_time = time.process_time() - t
+
+    backend = tensorbackends.get(args.backend)
+    if backend.rank != 0:
+        return
+
     with open(args.output_file, 'w+') as f, redirect_stdout(f):
-        for gate in circuit.gates:
-            print(gate)
+        print('circuit.nrow', args.nrow)
+        print('circuit.ncol', args.ncol)
+        print('circuit.nlayer', args.nlayer)
+        print('circuit.seed', args.seed)
+
+        print('backend.name', args.backend)
+        print('backend.nproc', backend.nproc)
+
+        print('peps.threshold', args.threshold)
+
+        print('result.statevector_time', statevector_time)
+        print('result.peps_time', peps_time)
+        print('result.contraction_time', contraction_time)
+        print('result.fidelity_time', fidelity_time)
+        print('result.fidelity', fidelity)
 
 
 def build_cli_parser():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('-r', '--nrow', help='the number of rows', type=int)
-    parser.add_argument('-c', '--ncol', help='the number of columns', type=int)
-    parser.add_argument('-l', '--nlayer', help='the number of layers', type=int)
+    parser.add_argument('-r', '--nrow', help='the number of rows', type=int, default=3)
+    parser.add_argument('-c', '--ncol', help='the number of columns', type=int, default=3)
+    parser.add_argument('-l', '--nlayer', help='the number of layers', type=int, default=4)
     parser.add_argument('-s', '--seed', help='random circuit seed', type=int, default=0)
 
-    parser.add_argument('-o', '--output-file', help='output file path')
+    parser.add_argument('-o', '--output-file', help='output file path', default='rqc_output.txt')
+
+    parser.add_argument('-b', '--backend', help='the backend to use', choices=['numpy', 'ctf', 'ctfview'], default='numpy')
+    parser.add_argument('-th', '--threshold', help='the threshold in trucated SVD when applying gates', type=float, default=1e-5)
 
     return parser
 
