@@ -1,4 +1,5 @@
 import argparse, time
+from itertools import chain
 from collections import namedtuple
 from contextlib import redirect_stdout
 
@@ -46,6 +47,10 @@ def generate(nrow, ncol, nlayer, seed):
     return Circuit(gates, nrow, ncol, nlayer, two_qubit_gate_name, seed)
 
 
+def get_max_bond_dim(peps):
+    return max(chain.from_iterable(site.shape[0:4] for _, site in np.ndenumerate(peps.grid)))
+
+
 def run_peps(circuit, threshold, backend):
     rank = tensorbackends.get(backend).rank
     qstate = pepsi.peps.computational_zeros(circuit.nrow, circuit.ncol, backend=backend)
@@ -53,7 +58,8 @@ def run_peps(circuit, threshold, backend):
         t = time.process_time()
         qstate.apply_circuit(layer, threshold=threshold)
         t = time.process_time() - t
-        if rank == 0: print(f'layer_time_{i}', t)
+        if rank == 0: print(f'layer_time_{i}', t, flush=True)
+        if rank == 0: print(f'max_bound_dim_{i}', get_max_bond_dim(qstate), flush=True)
     return qstate
 
 
