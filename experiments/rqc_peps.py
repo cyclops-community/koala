@@ -60,7 +60,7 @@ def run_peps(circuit, threshold, backend):
         qstate.apply_circuit(layer, threshold=threshold)
         t = time.process_time() - t
         if rank == 0: print(f'layer_time_{i}', t, flush=True)
-        if rank == 0: print(f'average_bound_dim_{i}', get_average_bond_dim(qstate), flush=True)
+        if rank == 0: print(f'average_bond_dim_{i}', get_average_bond_dim(qstate), flush=True)
     return qstate
 
 
