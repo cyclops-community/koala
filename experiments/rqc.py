@@ -1,6 +1,7 @@
 import argparse, time
+from itertools import chain
+from statistics import mean
 from collections import namedtuple
-from contextlib import redirect_stdout
 
 import numpy as np
 
@@ -49,9 +50,9 @@ def run_statevector(circuit, backend):
     qstate.apply_circuit(circuit.gates)
     return qstate
 
-def run_peps(circuit, threshold, backend):
+def run_peps(circuit, threshold, maxrank, backend):
     qstate = pepsi.peps.computational_zeros(circuit.nrow, circuit.ncol, backend=backend)
-    qstate.apply_circuit(circuit.gates, threshold=threshold)
+    qstate.apply_circuit(circuit.gates, threshold=threshold, maxrank=maxrank)
     return qstate
 
 
@@ -64,7 +65,7 @@ def main(args):
     statevector_time = time.process_time() - t
 
     t = time.process_time()
-    qstate_peps = run_peps(circuit, backend=args.backend, threshold=args.threshold)
+    qstate_peps = run_peps(circuit, backend=args.backend, threshold=args.threshold, maxrank=args.maxrank)
     peps_time = time.process_time() - t
 
     t = time.process_time()
@@ -76,10 +77,8 @@ def main(args):
     fidelity_time = time.process_time() - t
 
     backend = tensorbackends.get(args.backend)
-    if backend.rank != 0:
-        return
 
-    with open(args.output_file, 'w+') as f, redirect_stdout(f):
+    if backend.rank == 0:
         print('circuit.nrow', args.nrow)
         print('circuit.ncol', args.ncol)
         print('circuit.nlayer', args.nlayer)
@@ -89,6 +88,7 @@ def main(args):
         print('backend.nproc', backend.nproc)
 
         print('peps.threshold', args.threshold)
+        print('peps.maxrank', args.maxrank)
 
         print('result.statevector_time', statevector_time)
         print('result.peps_time', peps_time)
@@ -105,10 +105,9 @@ def build_cli_parser():
     parser.add_argument('-l', '--nlayer', help='the number of layers', type=int, default=4)
     parser.add_argument('-s', '--seed', help='random circuit seed', type=int, default=0)
 
-    parser.add_argument('-o', '--output-file', help='output file path', default='rqc_output.txt')
-
     parser.add_argument('-b', '--backend', help='the backend to use', choices=['numpy', 'ctf', 'ctfview'], default='numpy')
     parser.add_argument('-th', '--threshold', help='the threshold in trucated SVD when applying gates', type=float, default=1e-5)
+    parser.add_argument('-mr', '--maxrank', help='the maxrank in trucated SVD when applying gates', type=int, default=None)
 
     return parser
 

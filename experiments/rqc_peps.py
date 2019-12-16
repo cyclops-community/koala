@@ -51,16 +51,19 @@ def generate(nrow, ncol, nlayer, seed):
 def get_average_bond_dim(peps):
     return mean(chain.from_iterable(site.shape[0:4] for _, site in np.ndenumerate(peps.grid)))
 
+def get_max_bond_dim(peps):
+    return max(chain.from_iterable(site.shape[0:4] for _, site in np.ndenumerate(peps.grid)))
 
-def run_peps(circuit, threshold, backend):
+def run_peps(circuit, threshold, maxrank, backend):
     rank = tensorbackends.get(backend).rank
     qstate = pepsi.peps.computational_zeros(circuit.nrow, circuit.ncol, backend=backend)
     for i, layer in enumerate(circuit.gates):
         t = time.process_time()
-        qstate.apply_circuit(layer, threshold=threshold)
+        qstate.apply_circuit(layer, threshold=threshold, maxrank=maxrank)
         t = time.process_time() - t
         if rank == 0: print(f'layer_time_{i}', t, flush=True)
         if rank == 0: print(f'average_bond_dim_{i}', get_average_bond_dim(qstate), flush=True)
+        if rank == 0: print(f'max_bond_dim_{i}', get_max_bond_dim(qstate), flush=True)
     return qstate
 
 
@@ -68,7 +71,7 @@ def main(args):
     circuit = generate(args.nrow, args.ncol, args.nlayer, args.seed)
 
     t = time.process_time()
-    qstate_peps = run_peps(circuit, backend=args.backend, threshold=args.threshold)
+    qstate_peps = run_peps(circuit, backend=args.backend, threshold=args.threshold, maxrank=args.maxrank)
     peps_time = time.process_time() - t
 
     backend = tensorbackends.get(args.backend)
@@ -80,6 +83,7 @@ def main(args):
         print('backend.name', args.backend)
         print('backend.nproc', backend.nproc)
         print('peps.threshold', args.threshold)
+        print('peps.maxrank', args.maxrank)
         print('result.peps_time', peps_time)
 
 
@@ -93,6 +97,7 @@ def build_cli_parser():
 
     parser.add_argument('-b', '--backend', help='the backend to use', choices=['numpy', 'ctf', 'ctfview'], default='numpy')
     parser.add_argument('-th', '--threshold', help='the threshold in trucated SVD when applying gates', type=float, default=1e-5)
+    parser.add_argument('-mr', '--maxrank', help='the maxrank in trucated SVD when applying gates', type=int, default=None)
 
     return parser
 
