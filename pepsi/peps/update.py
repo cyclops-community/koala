@@ -33,7 +33,7 @@ def apply_local_pair_operator(state, operator, positions, threshold, maxrank):
         assert False
 
     u, s, v = state.backend.einsumsvd(prod_subscripts, x, y, operator)
-    u, s, v = truncate(state.backend, u, s, v, link[0], link[1], threshold=threshold)
+    u, s, v = truncate(state.backend, u, s, v, link[0], link[1], threshold=threshold, maxrank=maxrank)
     s = s ** 0.5
     u = state.backend.einsum(scale_u_subscripts, u, s)
     v = state.backend.einsum(scale_v_subscripts, v, s)
