@@ -4,7 +4,7 @@ def apply_single_site_operator(state, operator, position):
     state.grid[position] = state.backend.einsum('ijklx,xy->ijkly', state.grid[position], operator)
 
 
-def apply_local_pair_operator(state, operator, positions, threshold):
+def apply_local_pair_operator(state, operator, positions, threshold, maxrank):
     assert len(positions) == 2
     x_pos, y_pos = positions
     x, y = state.grid[x_pos], state.grid[y_pos]
@@ -33,7 +33,7 @@ def apply_local_pair_operator(state, operator, positions, threshold):
         assert False
 
     u, s, v = state.backend.einsumsvd(prod_subscripts, x, y, operator)
-    u, s, v = truncate(state.backend, u, s, v, link[0], link[1], threshold=threshold)
+    u, s, v = truncate(state.backend, u, s, v, link[0], link[1], threshold=threshold, maxrank=maxrank)
     s = s ** 0.5
     u = state.backend.einsum(scale_u_subscripts, u, s)
     v = state.backend.einsum(scale_v_subscripts, v, s)
@@ -66,10 +66,12 @@ def apply_low_rank_update(backend, environment, right_side, rank):
     ]
 
 
-def truncate(backend, u, s, v, u_axis, v_axis, threshold=None):
+def truncate(backend, u, s, v, u_axis, v_axis, threshold=None, maxrank=None):
     if threshold is None: threshold = 0.0
     residual = backend.norm(s) * threshold
     rank = max(next(r for r in range(s.shape[0], 0, -1) if backend.norm(s[r-1:]) >= residual), 0)
+    if maxrank is not None and rank > maxrank:
+        rank = maxrank
     u_slice = tuple(slice(None) if i != u_axis else slice(rank) for i in range(u.ndim))
     v_slice = tuple(slice(None) if i != v_axis else slice(rank) for i in range(v.ndim))
     s_slice = slice(rank)

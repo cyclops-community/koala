@@ -51,21 +51,21 @@ class PEPS(QuantumState):
             grid[idx] = tensor.conj()
         return PEPS(grid, self.backend)
 
-    def apply_gate(self, gate, threshold=None):
+    def apply_gate(self, gate, threshold=None, maxrank=None):
         tensor = tensorize(self.backend, gate.name, *gate.parameters)
-        self.apply_operator(tensor, gate.qubits, threshold=threshold)
+        self.apply_operator(tensor, gate.qubits, threshold=threshold, maxrank=maxrank)
 
-    def apply_circuit(self, gates, threshold=None):
+    def apply_circuit(self, gates, threshold=None, maxrank=None):
         for gate in gates:
-            self.apply_gate(gate, threshold=threshold)
+            self.apply_gate(gate, threshold=threshold, maxrank=maxrank)
 
-    def apply_operator(self, operator, sites, threshold=None):
+    def apply_operator(self, operator, sites, threshold=None, maxrank=None):
         operator = self.backend.astensor(operator)
         positions = [divmod(site, self.ncol) for site in sites]
         if len(positions) == 1:
             update.apply_single_site_operator(self, operator, positions[0])
         elif len(positions) == 2 and is_two_local(*positions):
-            update.apply_local_pair_operator(self, operator, positions, threshold)
+            update.apply_local_pair_operator(self, operator, positions, threshold, maxrank)
         else:
             raise ValueError('nonlocal operator is not supported')
 
