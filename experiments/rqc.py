@@ -70,6 +70,7 @@ def main(args):
 
     t = time.process_time()
     qstate = qstate_peps.statevector()
+    qstate /= qstate.norm()
     contraction_time = time.process_time() - t
 
     t = time.process_time()
