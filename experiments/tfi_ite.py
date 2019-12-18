@@ -9,7 +9,7 @@ import scipy.linalg as sla
 
 
 PAULI_X = np.array([[0,1],[1,0]], dtype=complex)
-PAULI_Z = np.diag([1.+0.j,-1.+0.j])
+PAULI_Z = np.array([[1,0],[0,-1]], dtype=complex)
 PAULI_ZZ = np.einsum('ij,kl->ikjl', PAULI_Z, PAULI_Z)
 
 
@@ -56,7 +56,8 @@ def run_statevector(tfi, steps, normfreq, backend):
             qstate.apply_operator(operator, sites)
         if i % normfreq == 0:
             qstate /= qstate.norm()
-    return qstate.expectation(tfi.observable)
+    qstate /= qstate.norm()
+    return qstate
 
 
 def run_peps(tfi, steps, normfreq, backend, threshold, maxrank):
@@ -66,19 +67,28 @@ def run_peps(tfi, steps, normfreq, backend, threshold, maxrank):
             qstate.apply_operator(operator, sites, threshold=threshold, maxrank=maxrank)
         if i % normfreq == 0:
             qstate /= qstate.norm()
-    return qstate.expectation(tfi.observable, use_cache=True)
+    qstate /= qstate.norm()
+    return qstate
 
 
 def main(args):
     tfi = TraversalFieldIsing(args.coupling, args.field, args.nrow, args.ncol, args.tau, args.backend)
 
     t = time.process_time()
-    statevector_energy = run_statevector(tfi, args.steps, args.normfreq, backend=args.backend)
-    statevector_time = time.process_time() - t
+    statevector_qstate = run_statevector(tfi, args.steps, args.normfreq, backend=args.backend)
+    statevector_ite_time = time.process_time() - t
 
     t = time.process_time()
-    peps_energy = run_peps(tfi, args.steps, args.normfreq, backend=args.backend, threshold=args.threshold, maxrank=args.maxrank)
-    peps_time = time.process_time() - t
+    statevector_energy = statevector_qstate.expectation(tfi.observable)
+    statevector_expectiation_time = time.process_time() - t
+
+    t = time.process_time()
+    peps_qstate = run_peps(tfi, args.steps, args.normfreq, backend=args.backend, threshold=args.threshold, maxrank=args.maxrank)
+    peps_ite_time = time.process_time() - t
+
+    t = time.process_time()
+    peps_energy = peps_qstate.expectation(tfi.observable, use_cache=True)
+    peps_expectation_time = time.process_time() - t
 
     backend = tensorbackends.get(args.backend)
 
@@ -101,8 +111,11 @@ def main(args):
         print('result.statevector_energy', statevector_energy)
         print('result.peps_energy', peps_energy)
 
-        print('result.statevector_time', statevector_time)
-        print('result.peps_time', peps_time)
+        print('result.statevector_ite_time', statevector_ite_time)
+        print('result.peps_ite_time', peps_ite_time)
+
+        print('result.statevector_expectiation_time', statevector_expectiation_time)
+        print('result.peps_expectation_time', peps_expectation_time)
 
 
 def build_cli_parser():
