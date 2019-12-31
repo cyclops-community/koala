@@ -37,7 +37,15 @@ class PEPS(QuantumState):
         return self.nrow * self.ncol
 
     def __getitem__(self, position):
-        return self.grid[position]
+        item = self.grid[position]
+        if isinstance(item, np.ndarray):
+            if item.ndim == 1:
+                if isinstance(position[0], int):
+                    item = item.reshape(1, -1)
+                else:
+                    item = item.reshape(-1, 1)
+            return PEPS(item, self.backend)
+        return item
 
     def copy(self):
         grid = np.empty_like(self.grid)
@@ -120,9 +128,9 @@ class PEPS(QuantumState):
         grid = np.empty_like(self.grid, dtype=object)
         zero = self.backend.astensor(np.array([1,0], dtype=complex))
         one = self.backend.astensor(np.array([0,1], dtype=complex))
-        for i, j in np.ndindex(*self.shape):
-            grid[i, j] = self.backend.einsum('ijklx,x->ijkl', self.grid[i,j], one if indices[i,j] else zero)
-        return contract.to_value(grid)
+        for idx, tensor in np.ndenumerate(self.grid):
+            grid[idx] = self.backend.einsum('ijklx,x->ijkl', tensor, one if indices[idx] else zero)
+        return contract.to_value(PEPS(grid, self.backend))
 
     def probability(self, indices):
         return np.abs(self.amplitude(indices))**2
@@ -138,7 +146,7 @@ class PEPS(QuantumState):
         return e
 
     def _expectation_with_cache(self, observable):
-        env = contract.create_env_cache(self.grid)
+        env = contract.create_env_cache(self)
         e = 0
         for tensor, sites in observable:
             other = self.copy()
@@ -146,15 +154,15 @@ class PEPS(QuantumState):
             rows = [site // self.ncol for site in sites]
             up, down = min(rows), max(rows)
             e += np.real_if_close(contract.inner_with_env(
-                other.grid[up:down+1], self.grid[up:down+1], env, up, down
+                other[up:down+1], self[up:down+1], env, up, down
             ))
         return e
 
     def contract(self):
-        return contract.to_statevector(self.grid)
+        return contract.to_statevector(self)
 
     def inner(self, peps):
-        return contract.inner(self.grid, peps.grid)
+        return contract.inner(self, peps)
 
 
 def tn_add(backend, a, b, internal_bonds, external_bonds):

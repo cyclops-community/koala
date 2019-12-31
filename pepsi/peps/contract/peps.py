@@ -78,39 +78,22 @@ class PEPS(object):
         Transpose the PEPS. Will cause tensors to transpose accordingly.
     """
             
-    def __init__(self, tensors, PEPS_like=None, backend=None, idx_order=None):
+    def __init__(self, tensors, PEPS_like=None, backend=None):
+        transpose = True
         if isinstance(tensors, PEPS):
             PEPS_like = PEPS_like or tensors
-        elif isinstance(tensors, (list, tuple)):
-            tensors = np.array(tensors)
-            copy = True
+            transpose = False
         if PEPS_like is not None:
             backend = backend or PEPS_like._backend
         self._backend = tbs.get(backend or 'numpy')
 
-        m, n = tensors.shape[:2]
-        self._tn = np.empty((m, n), dtype=object)
-        for i, j in np.ndindex((m, n)):
-            # pseudo_idx = []
-            # if isinstance(tensors[i,j], self._backend.tensor):
-            #     insert_pseudo = False if insert_pseudo is None else insert_pseudo
-            # else:
-            #     insert_pseudo = True if insert_pseudo is None else insert_pseudo
-            # if insert_pseudo:
-            #     if i == 0:
-            #         pseudo_idx.append(0)
-            #     if i == m-1:
-            #         pseudo_idx.append(2)
-            #     if j == 0:
-            #         pseudo_idx.append(3)
-            #     if j == n-1:
-            #         pseudo_idx.append(1)
-            self._tn[i,j] = self._backend.tensor(tensors[i,j])
-            self._tn[i,j] = self._tn[i,j].reshape(self._tn[i,j].shape + tuple([1] * (6 - self._tn[i,j].ndim)))
+        self._tn = np.empty(tensors.shape, dtype=object)
+        for idx, tsr in np.ndenumerate(tensors):
             # self._tn[i,j] = self._backend.tensor(tensors[i,j], None, pseudo_idx, backend=backend, copy=copy)
             # self._tn[i,j].insert_pseudo(*range(self._tn[i,j].vndim, 6))
-            if idx_order:
-                self._tn[i,j] = self._tn[i,j].transpose(np.argsort(idx_order + list(range(len(idx_order), 6))))
+            self._tn[idx] = tsr.transpose(*((0, 3, 2, 1) + tuple(range(4, tsr.ndim)))) if transpose else tsr.copy()
+            self._tn[idx] = self._tn[idx].reshape(*(self._tn[idx].shape + tuple([1] * (6 - tsr.ndim))))
+
 
     def __abs__(self):
         new_tn = np.empty_like(self._tn)
