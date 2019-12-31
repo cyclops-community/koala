@@ -4,7 +4,7 @@ This module wraps the PEPS contraction routines from https://github.com/HaoTy/PE
 
 import numpy as np
 
-import peps
+from . import peps
 
 
 def to_statevector(grid):
@@ -48,10 +48,10 @@ def inner_with_env(this, that, env, up_idx, down_idx):
 
 
 def _create_peps(grid):
-    return peps.PEPS(_unwrap(grid), insert_pseudo=False, idx_order=[0,3,2,1,4])
+    return peps.PEPS(_unwrap(grid), idx_order=[0,3,2,1,4])
 
 def _create_scalar_peps(grid):
-    return peps.PEPS(_unwrap(grid), insert_pseudo=False, idx_order=[0,3,2,1])
+    return peps.PEPS(_unwrap(grid), idx_order=[0,3,2,1])
 
 def _unwrap(grid):
     newgrid = np.empty_like(grid)
