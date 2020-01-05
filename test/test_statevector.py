@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 from tensorbackends.utils import test_with_backend
 
-from pepsi import Observable, statevector
+from koala import Observable, statevector
 
 from .gate import Gate
 
