@@ -82,9 +82,9 @@ class PEPS(object):
         transpose = True
         if isinstance(tensors, PEPS):
             PEPS_like = PEPS_like or tensors
-            transpose = False
         if PEPS_like is not None:
             backend = backend or PEPS_like._backend
+            transpose = False
         self._backend = tbs.get(backend or 'numpy')
 
         self._tn = np.empty(tensors.shape, dtype=object)
