@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 from tensorbackends.utils import test_with_backend
 
-from pepsi import Observable, statevector
+from koala import Observable, statevector
 
 from .gate import Gate
 
@@ -63,3 +63,18 @@ class TestStateVector(unittest.TestCase):
             Observable.Z(3),
         ])
         self.assertTrue(np.isclose(qstate.expectation(observable), -3))
+
+    def test_add(self, backend):
+        psi = statevector.computational_zeros(6, backend=backend)
+        phi = statevector.computational_ones(6, backend=backend)
+        self.assertTrue(np.isclose((psi + phi).norm(), np.sqrt(2)))
+
+    def test_inner(self, backend):
+        psi = statevector.computational_zeros(6, backend=backend)
+        psi.apply_circuit([
+            Gate('H', [], [0]),
+            Gate('CX', [], [0,3]),
+            Gate('H', [], [3]),
+        ])
+        phi = statevector.computational_zeros(6, backend=backend)
+        self.assertTrue(np.isclose(psi.inner(phi), 0.5))
