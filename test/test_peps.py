@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 from tensorbackends.utils import test_with_backend
 
-from pepsi import Observable, peps
+from koala import Observable, peps, statevector
 
 from .gate import Gate
 
@@ -78,3 +78,29 @@ class TestPEPS(unittest.TestCase):
             Observable.Z(3),
         ])
         self.assertTrue(np.isclose(qstate.expectation(observable, use_cache=True), -3))
+
+    def test_add(self, backend):
+        psi = peps.computational_zeros(2, 3, backend=backend)
+        phi = peps.computational_ones(2, 3, backend=backend)
+        self.assertTrue(np.isclose((psi + phi).norm(), np.sqrt(2)))
+
+    def test_inner(self, backend):
+        psi = peps.computational_zeros(2, 3, backend=backend)
+        psi.apply_circuit([
+            Gate('H', [], [0]),
+            Gate('CX', [], [0,3]),
+            Gate('H', [], [3]),
+        ])
+        phi = peps.computational_zeros(2, 3, backend=backend)
+        self.assertTrue(np.isclose(psi.inner(phi), 0.5))
+
+    def test_statevector(self, backend):
+        psi = peps.computational_zeros(2, 3, backend=backend)
+        psi.apply_circuit([
+            Gate('H', [], [0]),
+            Gate('CX', [], [0,3]),
+            Gate('H', [], [3]),
+        ])
+        psi = psi.statevector()
+        phi = statevector.computational_zeros(6, backend=backend)
+        self.assertTrue(np.isclose(psi.inner(phi), 0.5))
