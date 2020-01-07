@@ -10,7 +10,7 @@ from . import peps
 def to_statevector(grid):
     peps_obj = _create_peps(grid)
     result = peps_obj.contract().reshape(*[2]*grid.shape[0]*grid.shape[1])
-    result = np.transpose(result, [i+j*grid.shape[0] for i, j in np.ndindex(*grid.shape)])
+    result = grid.backend.transpose(result, [i+j*grid.shape[0] for i, j in np.ndindex(*grid.shape)])
     return result
 
 def to_value(grid):
