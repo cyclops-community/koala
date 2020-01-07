@@ -3,9 +3,7 @@ import unittest
 import numpy as np
 from tensorbackends.utils import test_with_backend
 
-from koala import Observable, peps, statevector
-
-from .gate import Gate
+from koala import Observable, peps, statevector, Gate
 
 
 @test_with_backend()
