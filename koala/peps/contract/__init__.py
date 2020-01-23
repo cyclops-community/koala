@@ -4,13 +4,13 @@ This module wraps the PEPS contraction routines from https://github.com/HaoTy/PE
 
 import numpy as np
 
-import peps
+from . import peps
 
 
 def to_statevector(grid):
     peps_obj = _create_peps(grid)
-    result = peps_obj.contract().match_virtual().reshape(*[2]*grid.shape[0]*grid.shape[1])
-    result = np.transpose(result, [i+j*grid.shape[0] for i, j in np.ndindex(*grid.shape)])
+    result = peps_obj.contract().reshape(*[2]*grid.shape[0]*grid.shape[1])
+    result = grid.backend.transpose(result, [i+j*grid.shape[0] for i, j in np.ndindex(*grid.shape)])
     return result
 
 def to_value(grid):
@@ -47,11 +47,11 @@ def inner_with_env(this, that, env, up_idx, down_idx):
     return peps_obj.contract()
 
 
-def _create_peps(grid):
-    return peps.PEPS(_unwrap(grid), insert_pseudo=False, idx_order=[0,3,2,1,4])
+def _create_peps(p):
+    return peps.PEPS(p.grid, backend=p.backend)
 
-def _create_scalar_peps(grid):
-    return peps.PEPS(_unwrap(grid), insert_pseudo=False, idx_order=[0,3,2,1])
+def _create_scalar_peps(p):
+    return peps.PEPS(p.grid, backend=p.backend)
 
 def _unwrap(grid):
     newgrid = np.empty_like(grid)
