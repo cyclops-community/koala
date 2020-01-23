@@ -23,6 +23,71 @@ def inner(this, that):
     return this.inner(that).contract()
 
 
+def get_vertical_local_pair_env(state, pos):
+    """Get the env of site at `pos` and the site below it
+    Parameters:
+    ===========
+    state: pepsi.peps.PEPS
+        the PEPS to get env from
+    pos: Tuple[int, int]
+        the position of the upper site
+    Returns:
+    ========
+    output: List[state.backend.tensor]
+        6 env tensors in the following order, assuming the sites look like this
+        when looking from upside::
+            1
+            |
+        2 - * - 0
+            |
+        3 - * - 5
+            |
+            4
+        each env tensor looks like this
+            3
+            |
+        0 - * - 1
+            |
+            2
+        where leg 0 connects to previous env tensor, leg 1 connects to next env tensor,
+        leg 2 and 3 connect to sites
+        e
+    """
+    env = _create_peps(state).contract_vertical_pair_env(pos)
+    return [state.backend.tensor(tsr.match_virtual()) for tsr in env]
+
+
+def get_horizontal_local_pair_env(state, pos):
+    """Get the env of site at `pos` and the site right to it
+    Parameters:
+    ===========
+    state: pepsi.peps.PEPS
+        the PEPS to get env from
+    pos: Tuple[int, int]
+        the position of the left site
+    Returns:
+    ========
+    output: List[state.backend.tensor]
+        6 env tensors in the following order, assuming the sites look like this
+        when looking from upside:
+            0   5
+            |   |
+        1 - * - * - 4
+            |   |
+            2   3
+        each env tensor looks like this
+            3
+            |
+        0 - * - 1
+            |
+            2
+        where leg 0 connects to previous env tensor, leg 1 connects to next env tensor,
+        leg 2 and 3 connect to sites
+    """
+    env = _create_peps(state).contract_horizontal_pair_env(pos)
+    return [state.backend.tensor(tsr.match_virtual()) for tsr in env]
+
+
 def create_env_cache(grid):
     peps_obj = _create_peps(grid).norm()
     _up, _down = {}, {}

@@ -1,5 +1,7 @@
 from string import ascii_letters as chars
 
+from .contract import get_horizontal_local_pair_env, get_vertical_local_pair_env
+
 def apply_single_site_operator(state, operator, position):
     state.grid[position] = state.backend.einsum('ijklx,xy->ijkly', state.grid[position], operator)
 
@@ -64,6 +66,81 @@ def apply_low_rank_update(backend, environment, right_side, rank):
         backend.matmul(R_inv, backend.transpose(VT[:rank, :])).reshape(
             (length, length, rank))
     ]
+
+
+def apply_full_update(state, operator, pos1, pos2, rank, epsilon=1e-5):
+    """Apply full update to two sites
+
+    Parameters
+    ----------
+    state: pepsi.peps.PEPS
+        the PEPS to modify
+    operator: state.backend.tensor
+        operator tensor of shape (pos1_input, pos2_input, pos1_output, pos2_output)
+    pos1: Tuple[int, int]
+        the position of the first site
+    pos2: Tuple[int, int]
+        the position of the second site (adjacent to `pos1`)
+    rank: int
+        new bond dim between the updated sites
+    epsilon: double
+        the criteria to stop the low rank iterations
+    """
+    site1, site2 = state[pos1], state[pos2]
+    backend = state.backend
+    env_str = "0aA1,1bB2,2cC3,3dD4,4eE5,5fF0"
+
+    if pos2[0] == pos1[0]:
+        assert pos2[1] == pos1[1] + 1
+        env = get_horizontal_local_pair_env(state, pos1)
+        sites_w_operator = backend.einsum("abczl,fzdem,lmop->abcdefop", site1, site2, operator)
+        rhs = backend.einsum(f"{env_str},abcdefop->opABCDEF", *env, sites_w_operator)
+        site1, site2 = backend.einsvd("abcdefop->abclo,fldep", sites_w_operator)
+        residual = 1.
+        while residual > epsilon:
+            site1_new, site2_new = low_rank_update_step(backend, env, rhs, site1, site2, mode='horizontal')
+            # check the residual
+            residual = backend.norm(site1_new - site1) + backend.norm(site2_new - site2)
+            site1, site2 = site1_new, site2_new
+    else:
+        assert pos2[0] == pos1[0] + 1 and pos2[1] == pos1[0]
+        env = get_vertical_local_pair_env(state, pos1)
+        sites_w_operator = backend.einsum("bczal,zdefm,lmop->abcdefop", site1, site2, operator)
+        rhs = backend.einsum(f"{env_str},abcdefop->opABCDEF", *env, sites_w_operator)
+        site1, site2 = backend.einsvd("abcdefop->bclao,ldefp", sites_w_operator)
+        residual = 1.
+        while residual > epsilon:
+            site1_new, site2_new = low_rank_update_step(backend, env, rhs, site1, site2, mode='vertical')
+            # check the residual
+            residual = backend.norm(site1_new - site1) + backend.norm(site2_new - site2)
+            site1, site2 = site1_new, site2_new
+    state[pos1], state[pos2] = site1, site2
+    return state
+
+
+def low_rank_update_step(backend, env, rhs, site1, site2, mode='horizontal'):
+    env_str = "0aA1,1bB2,2cC3,3dD4,4eE5,5fF0"
+    if mode == 'vertical':
+        site_strs = ['ldefp', 'LDEFp', 'bclao', 'BCLAo']
+    elif mode == 'horizontal':
+        site_strs = ['fldep', 'FLDEp', 'abclo', 'ABCLo']
+    # update site1
+    env_site = backend.einsum(f"{env_str},{site_strs[0]},{site_strs[1]}->abclABCL", *env, site2,  site2)
+    rhs_site = backend.einsum(f"opABCDEF,{site_strs[1]}->oABCL", rhs, site2)
+    length = env_site.shape[0] * env_site.shape[1] * env_site.shape[2] * env_site.shape[3]
+    env_tensor_shape = env_site.shape
+    env_site = env_site.reshape((length, length))
+    inv_env_site = backend.inv(env_site).reshape(*env_tensor_shape)
+    site1_new = backend.einsum(f"oABCL,ABCLabcl->{site_strs[2]}", rhs_site, inv_env_site)
+    # update site2
+    env_site = backend.einsum(f"abcdefABCDEF,{site_strs[2]},{site_strs[3]}->deflDEFL", env, site2, site2)
+    rhs_site = backend.einsum(f"opABCDEF,{site_strs[3]}->pDEFL", rhs, site2)
+    length = env_site.shape[0] * env_site.shape[1] * env_site.shape[2] * env_site.shape[3]
+    env_tensor_shape = env_site.shape
+    env_site = env_site.reshape((length, length))
+    inv_env_site = inv(backend, env_site).reshape(*env_tensor_shape)
+    site2_new = backend.einsum(f"pDEFL,DEFLdefl->{site_strs[0]}", rhs_site, inv_env_site)
+    return site1_new, site2_new
 
 
 def truncate(backend, u, s, v, u_axis, v_axis, threshold=None, maxrank=None):

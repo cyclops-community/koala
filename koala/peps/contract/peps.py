@@ -681,3 +681,128 @@ class PEPS(object):
         elif axis == 'z':
             einstr = 'abcdpi,ABCDiq->(aA)(bB)(cC)(dD)pq'
         return self._backend.einsum(einstr, a, b, **svdargs)
+
+    def contract_horizontal_pair_env(self, pos):
+        """Get the env of site at `pos` and the site right to it
+
+        Parameters
+        ----------
+        pos: Tuple[int, int]
+            the position of the left site
+
+        Returns
+        -------
+        output: List[self._backend.Tensor]
+            6 env tensors in the following order, assuming the sites look like this
+            when looking from upside:
+                0   5
+                |   |
+            1 - * - * - 4
+                |   |
+                2   3
+            each env tensor looks like this
+                3
+                |
+            0 - * - 1
+                |
+                2
+            where leg 0 connects to previous env tensor, leg 1 connects to next env tensor,
+            leg 2 and 3 connect to sites
+        """
+        row_range, col_range = (pos[0],pos[0]+1), (pos[1],pos[1]+2)
+        env_peps = self.inner(self).contract_env(row_range, col_range)
+        site1, site2 = self[pos], self[pos[0], pos[1]+1]
+        absorb_next = 'abcdxy,idkluv->bl(xu)(yvaick)'
+        fuse_reorder = 'abcdxy,i->bdx(yaci)'
+        one = self._backend.ones(1)
+        env = [
+            self._backend.einsum(absorb_next, _split_as_phys(env_peps[0,1],2), _move_leg(env_peps[0,0],2,3)),
+            self._backend.einsum(absorb_next, _rotate_site(_split_as_phys(env_peps[1,0], 1),1),  _rotate_site(_move_leg(env_peps[2,0],0,3),2)),
+            self._backend.einsum(fuse_reorder, _rotate_site(_split_as_phys(env_peps[2,1],0),2), one),
+            self._backend.einsum(absorb_next, _rotate_site(_split_as_phys(env_peps[2,2],0),2), _rotate_site(_move_leg(env_peps[2,3],3,2),-1)),
+            self._backend.einsum(absorb_next, _rotate_site(_split_as_phys(env_peps[1,3],3),-1), _move_leg(env_peps[0,3],2,1)),
+            self._backend.einsum(fuse_reorder, _split_as_phys(env_peps[0,2],2), one),
+        ]
+        return env
+
+
+    def contract_vertical_pair_env(self, pos):
+        """Get the env of site at `pos` and the site below it
+
+        Parameters
+        ----------
+        pos: Tuple[int, int]
+            the position of the upper site
+
+        Returns
+        -------
+        output: List[self._backend.Tensor]
+            6 env tensors in the following order, assuming the sites look like this
+            when looking from upside:
+                1
+                |
+            2 - * - 0
+                |
+            3 - * - 5
+                |
+                4
+            each env tensor looks like this
+                3
+                |
+            0 - * - 1
+                |
+                2
+            where leg 0 connects to previous env tensor, leg 1 connects to next env tensor,
+            leg 2 and 3 connect to sites
+        """
+        row_range, col_range = (pos[0],pos[0]+2), (pos[1],pos[1]+1)
+        env_peps = self.inner(self).contract_env(row_range, col_range)
+        site1, site2 = self[pos], self[pos[0], pos[1]+1]
+        absorb_next = 'abcdxy,idkluv->bl(xu)(yvaick)'
+        fuse_reorder = 'abcdxy,i->bdx(yaci)'
+        one = self._backend.ones(1)
+        env = [
+            self._backend.einsum(absorb_next, _rotate_site(_split_as_phys(env_peps[1,2],3), -1), _move_leg(env_peps[0,2],1,2)),
+            self._backend.einsum(absorb_next, _split_as_phys(env_peps[0,1],2),  _move_leg(env_peps[0,0],2,3)),
+            self._backend.einsum(fuse_reorder, _rotate_site(_split_as_phys(env_peps[1,0],1),1), one),
+            self._backend.einsum(absorb_next, _rotate_site(_split_as_phys(env_peps[2,0],1),1), _rotate_site(_move_leg(env_peps[3,0],1,2),1)),
+            self._backend.einsum(absorb_next, _rotate_site(_split_as_phys(env_peps[3,1],0),2), _rotate_site(_move_leg(env_peps[3,2],0,1),2)),
+            self._backend.einsum(fuse_reorder, _rotate_site(_split_as_phys(env_peps[2,2],3),-1), one),
+        ]
+        return env
+
+
+def _split_as_phys(tensor, ind):
+    """Split merged internal legs to two legs of same rank and pretend to
+    be physical legs
+    """
+    shape = tensor.shape
+    assert shape[4]==1 and shape[5]==1
+    rank_splitted = int(shape[ind]**.5)
+    vectorized = tensor.reshape(-1)
+    intermediate_shape = shape[:ind]+(1,rank_splitted, rank_splitted)+shape[ind+1:4]
+    tensor = tensor.reshape(*intermediate_shape)
+
+    order = np.zeros(6, dtype=int)
+    mask1 = [(i!=ind+1 and i!=ind+2) for i in range(6)]
+    mask2 = [(i==ind+1 or  i==ind+2) for i in range(6)]
+    order[:4] = np.arange(6)[mask1]
+    order[4:] = np.arange(6)[mask2]
+    return tensor.transpose(order)
+
+
+def _move_leg(tensor, from_ind, to_ind):
+    """Used on corner sites when convert the border of a peps into a mps"""
+    order = list(range(tensor.ndim))
+    order[from_ind], order[to_ind] = order[to_ind], order[from_ind]
+    return tensor.transpose(order)
+
+
+def _rotate_site(tensor, times=1):
+    """Rotate the tensor around z axis (clockwise) """
+    order = np.arange(6, dtype=int)
+    rotate = np.zeros((4,4), dtype=int)
+    rotate[0,3], rotate[1,0], rotate[2,1], rotate[3,2] = 1,1,1,1
+    for _ in range(times%4):
+        order[:4] = rotate @ order[:4]
+    return tensor.transpose(order)
