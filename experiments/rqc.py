@@ -6,8 +6,8 @@ from collections import namedtuple
 import numpy as np
 
 import tensorbackends
-import pepsi.statevector
-import pepsi.peps
+import koala.statevector
+import koala.peps
 
 Circuit = namedtuple('Circuit', ['gates', 'nrow', 'ncol', 'nlayer', 'two_qubit_gate_name', 'seed'])
 Gate = namedtuple('Gate', ['name', 'parameters', 'qubits'])
@@ -46,12 +46,12 @@ def generate(nrow, ncol, nlayer, seed):
 
 
 def run_statevector(circuit, backend):
-    qstate = pepsi.statevector.computational_zeros(circuit.nrow*circuit.ncol, backend=backend)
+    qstate = koala.statevector.computational_zeros(circuit.nrow*circuit.ncol, backend=backend)
     qstate.apply_circuit(circuit.gates)
     return qstate
 
 def run_peps(circuit, threshold, maxrank, backend):
-    qstate = pepsi.peps.computational_zeros(circuit.nrow, circuit.ncol, backend=backend)
+    qstate = koala.peps.computational_zeros(circuit.nrow, circuit.ncol, backend=backend)
     qstate.apply_circuit(circuit.gates, threshold=threshold, maxrank=maxrank)
     return qstate
 

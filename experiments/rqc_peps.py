@@ -7,8 +7,8 @@ from contextlib import redirect_stdout
 import numpy as np
 
 import tensorbackends
-import pepsi.statevector
-import pepsi.peps
+import koala.statevector
+import koala.peps
 
 Circuit = namedtuple('Circuit', ['gates', 'nrow', 'ncol', 'nlayer', 'two_qubit_gate_name', 'seed'])
 Gate = namedtuple('Gate', ['name', 'parameters', 'qubits'])
@@ -56,7 +56,7 @@ def get_max_bond_dim(peps):
 
 def run_peps(circuit, threshold, maxrank, backend):
     rank = tensorbackends.get(backend).rank
-    qstate = pepsi.peps.computational_zeros(circuit.nrow, circuit.ncol, backend=backend)
+    qstate = koala.peps.computational_zeros(circuit.nrow, circuit.ncol, backend=backend)
     for i, layer in enumerate(circuit.gates):
         t = time.process_time()
         qstate.apply_circuit(layer, threshold=threshold, maxrank=maxrank)

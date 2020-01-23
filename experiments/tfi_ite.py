@@ -1,7 +1,7 @@
 from itertools import chain
 import argparse, time
 
-from pepsi import statevector, peps, Observable
+from koala import statevector, peps, Observable
 
 import tensorbackends
 import numpy as np
