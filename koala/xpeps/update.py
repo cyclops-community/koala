@@ -5,7 +5,7 @@ def apply_single_site_operator(state, operator, position):
     state.sites[position] = state.backend.einsum('ijklx,xy->ijkly', state.sites[position], operator)
 
 
-def apply_local_pair_operator(state, operator, positions, threshold, maxrank):
+def apply_local_pair_operator(state, operator, positions, threshold, maxrank, normalize=False):
     assert len(positions) == 2
     backend = state.backend
     x_pos, y_pos = positions
@@ -41,6 +41,7 @@ def apply_local_pair_operator(state, operator, positions, threshold, maxrank):
         w = state.vertical_bonds[x_pos[0], x_pos[1]]
         u, s, v = backend.einsumsvd('abcdx,c,cfghy,xyuv->abndu,nfghv', x, w, y, operator)
         u, s, v = truncate(backend, u, s, v, u_axis=2, v_axis=0, threshold=threshold, maxrank=maxrank)
+        if normalize: s /= backend.norm(s)
         state.sites[x_pos] = absorb_bonds_inv(u, *x_pos, {'above', 'left', 'right'})
         state.sites[y_pos] = absorb_bonds_inv(v, *y_pos, {'below', 'left', 'right'})
         state.vertical_bonds[x_pos[0], x_pos[1]] = s.astype(complex)
@@ -50,6 +51,7 @@ def apply_local_pair_operator(state, operator, positions, threshold, maxrank):
         w = state.vertical_bonds[y_pos[0], x_pos[1]]
         u, s, v = backend.einsumsvd('abcdx,a,efahy,xyuv->nbcdu,efnhv', x, w, y, operator)
         u, s, v = truncate(backend, u, s, v, u_axis=0, v_axis=2, threshold=threshold, maxrank=maxrank)
+        if normalize: s /= backend.norm(s)
         state.sites[x_pos] = absorb_bonds_inv(u, *x_pos, {'below', 'left', 'right'})
         state.sites[y_pos] = absorb_bonds_inv(v, *y_pos, {'above', 'left', 'right'})
         state.vertical_bonds[y_pos[0], x_pos[1]] = s.astype(complex)
@@ -59,6 +61,7 @@ def apply_local_pair_operator(state, operator, positions, threshold, maxrank):
         w = state.horizontal_bonds[x_pos[0], x_pos[1]]
         u, s, v = backend.einsumsvd('abcdx,d,edghy,xyuv->abcnu,enghv', x, w, y, operator)
         u, s, v = truncate(backend, u, s, v, u_axis=3, v_axis=1, threshold=threshold, maxrank=maxrank)
+        if normalize: s /= backend.norm(s)
         state.horizontal_bonds[x_pos[0], x_pos[1]] = s.astype(complex)
         state.sites[x_pos] = absorb_bonds_inv(u, *x_pos, {'above', 'below', 'left'})
         state.sites[y_pos] = absorb_bonds_inv(v, *y_pos, {'above', 'below', 'right'})
@@ -68,6 +71,7 @@ def apply_local_pair_operator(state, operator, positions, threshold, maxrank):
         w = state.horizontal_bonds[x_pos[0], y_pos[1]]
         u, s, v = backend.einsumsvd('abcdx,b,efgby,xyuv->ancdu,efgnv', x, w, y, operator)
         u, s, v = truncate(backend, u, s, v, u_axis=1, v_axis=3, threshold=threshold, maxrank=maxrank)
+        if normalize: s /= backend.norm(s)
         state.sites[x_pos] = absorb_bonds_inv(u, *x_pos, {'above', 'below', 'right'})
         state.sites[y_pos] = absorb_bonds_inv(v, *y_pos, {'above', 'below', 'left'})
         state.horizontal_bonds[x_pos[0], y_pos[1]] = s.astype(complex)

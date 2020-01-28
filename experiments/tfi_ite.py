@@ -1,7 +1,7 @@
 from itertools import chain
 import argparse, time
 
-from koala import statevector, peps, Observable
+from koala import statevector, peps, xpeps, Observable
 
 import tensorbackends
 import numpy as np
@@ -71,6 +71,14 @@ def run_peps(tfi, steps, normfreq, backend, threshold, maxrank):
     return qstate
 
 
+def run_xpeps(tfi, steps, normfreq, backend, threshold, maxrank):
+    qstate = xpeps.computational_zeros(tfi.nrows, tfi.ncols, backend=backend)
+    for i in range(steps):
+        for operator, sites in tfi.trotter_steps():
+            qstate.simple_update(operator, sites, threshold=threshold, maxrank=maxrank)
+    return qstate
+
+
 def main(args):
     tfi = TraversalFieldIsing(args.coupling, args.field, args.nrow, args.ncol, args.tau, args.backend)
 
@@ -89,6 +97,14 @@ def main(args):
     t = time.process_time()
     peps_energy = peps_qstate.expectation(tfi.observable, use_cache=True)
     peps_expectation_time = time.process_time() - t
+
+    t = time.process_time()
+    xpeps_qstate = run_xpeps(tfi, args.steps, args.normfreq, backend=args.backend, threshold=args.threshold, maxrank=args.maxrank)
+    xpeps_ite_time = time.process_time() - t
+
+    t = time.process_time()
+    xpeps_energy = xpeps_qstate.expectation(tfi.observable, use_cache=False)
+    xpeps_expectation_time = time.process_time() - t
 
     backend = tensorbackends.get(args.backend)
 
@@ -110,12 +126,15 @@ def main(args):
 
         print('result.statevector_energy', statevector_energy)
         print('result.peps_energy', peps_energy)
+        print('result.xpeps_energy', xpeps_energy)
 
         print('result.statevector_ite_time', statevector_ite_time)
         print('result.peps_ite_time', peps_ite_time)
+        print('result.xpeps_ite_time', xpeps_ite_time)
 
         print('result.statevector_expectiation_time', statevector_expectiation_time)
         print('result.peps_expectation_time', peps_expectation_time)
+        print('result.xpeps_expectation_time', xpeps_expectation_time)
 
 
 def build_cli_parser():

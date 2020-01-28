@@ -80,6 +80,16 @@ class XPEPS(QuantumState):
         else:
             raise ValueError('nonlocal operator is not supported')
 
+    def simple_update(self, operator, sites, threshold=None, maxrank=None):
+        operator = self.backend.astensor(operator)
+        positions = [divmod(site, self.ncol) for site in sites]
+        if len(positions) == 1:
+            update.apply_single_site_operator(self, operator, positions[0])
+        elif len(positions) == 2 and is_two_local(*positions):
+            update.apply_local_pair_operator(self, operator, positions, threshold, maxrank, normalize=True)
+        else:
+            raise ValueError('nonlocal operator is not supported')
+
     def __add__(self, other):
         if isinstance(other, XPEPS):
             return self.add(other)
