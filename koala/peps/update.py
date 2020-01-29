@@ -95,7 +95,10 @@ def apply_full_update(state, operator, pos1, pos2, rank, epsilon=1e-5):
         env = get_horizontal_local_pair_env(state, pos1)
         sites_w_operator = backend.einsum("abczl,fzdem,lmop->abcdefop", site1, site2, operator)
         rhs = backend.einsum(f"{env_str},abcdefop->opABCDEF", *env, sites_w_operator)
-        site1, site2 = backend.einsvd("abcdefop->abclo,fldep", sites_w_operator)
+        site1, s, site2 = backend.einsvd("abcdefop->abclo,fldep", sites_w_operator)
+        s **= 0.5
+        site1 = backend.einsum('abclo,l->abclo', site1, s)
+        site2 = backend.einsum('fldep,l->fldep', site2, s)
         residual = 1.
         while residual > epsilon:
             site1_new, site2_new = low_rank_update_step(backend, env, rhs, site1, site2, mode='horizontal')
@@ -107,7 +110,10 @@ def apply_full_update(state, operator, pos1, pos2, rank, epsilon=1e-5):
         env = get_vertical_local_pair_env(state, pos1)
         sites_w_operator = backend.einsum("bczal,zdefm,lmop->abcdefop", site1, site2, operator)
         rhs = backend.einsum(f"{env_str},abcdefop->opABCDEF", *env, sites_w_operator)
-        site1, site2 = backend.einsvd("abcdefop->bclao,ldefp", sites_w_operator)
+        site1, s, site2 = backend.einsvd("abcdefop->bclao,ldefp", sites_w_operator)
+        s **= 0.5
+        site1 = backend.einsum('bclao,l->bclao', site1, s)
+        site2 = backend.einsum('ldefp,l->ldefp', site2, s)
         residual = 1.
         while residual > epsilon:
             site1_new, site2_new = low_rank_update_step(backend, env, rhs, site1, site2, mode='vertical')

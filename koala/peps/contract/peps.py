@@ -388,7 +388,7 @@ class PEPS(object):
         if row_range[1] < self.nrow:
             mid_peps = mid_peps.concatenate(self[row_range[1]:].contract_to_MPS(**svdargs))
         env_peps = mid_peps[:,col_range[0]:col_range[1]]
-        if col_range[0] > 0: 
+        if col_range[0] > 0:
             env_peps = mid_peps[:,:col_range[0]].contract_to_MPS(horizontal=True, **svdargs).concatenate(env_peps, axis=1)
         if col_range[1] < mid_peps.shape[1]:
             env_peps = env_peps.concatenate(mid_peps[:,col_range[1]:].contract_to_MPS(horizontal=True, **svdargs), axis=1)
@@ -448,13 +448,13 @@ class PEPS(object):
         if mps_mult_mpo is None:
             mps_mult_mpo = self._mps_mult_mpo
         if horizontal:
-            self.rotate(-1)
-        mps = self._tn[0]
-        for mpo in self._tn[1:]:
-            mps = mps_mult_mpo(mps, mpo, **svdargs)
-        mps = mps.reshape(1, -1)
-        p = PEPS(mps, self)
-        return p.rotate() if horizontal else p
+            return self.rotate(-1).contract_to_MPS(horizontal=False, mps_mult_mpo=mps_mult_mpo, **svdargs).rotate()
+        else:
+            mps = self._tn[0]
+            for mpo in self._tn[1:]:
+                mps = mps_mult_mpo(mps, mpo, **svdargs)
+            mps = mps.reshape(1, -1)
+            return PEPS(mps, self)
 
     def contract_TRG(self, **svdargs):
         """
@@ -497,7 +497,7 @@ class PEPS(object):
         """
         tn = np.empty_like(self)
         for idx, tsr in np.ndenumerate(self):
-            tn[idx] = tsr.coy()
+            tn[idx] = tsr.copy()
         return PEPS(tn, self)
 
     def dagger(self):

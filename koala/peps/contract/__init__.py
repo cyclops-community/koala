@@ -53,8 +53,7 @@ def get_vertical_local_pair_env(state, pos):
         leg 2 and 3 connect to sites
         e
     """
-    env = _create_peps(state).contract_vertical_pair_env(pos)
-    return [state.backend.tensor(tsr.match_virtual()) for tsr in env]
+    return _create_peps(state).contract_vertical_pair_env(pos)
 
 
 def get_horizontal_local_pair_env(state, pos):
@@ -84,8 +83,7 @@ def get_horizontal_local_pair_env(state, pos):
         where leg 0 connects to previous env tensor, leg 1 connects to next env tensor,
         leg 2 and 3 connect to sites
     """
-    env = _create_peps(state).contract_horizontal_pair_env(pos)
-    return [state.backend.tensor(tsr.match_virtual()) for tsr in env]
+    return _create_peps(state).contract_horizontal_pair_env(pos)
 
 
 def create_env_cache(grid):
