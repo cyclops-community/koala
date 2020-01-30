@@ -37,9 +37,17 @@ class TraversalFieldIsing:
     def double_positions(self):
         # horizontal double gate positions
         for i, j in np.ndindex(self.nrows, self.ncols-1):
+            if i == 0 or i == self.nrows - 1:
+                continue
+            if j == 0 or j == self.ncols - 2:
+                continue
             yield (i*self.ncols+j, i*self.ncols+j+1)
         # vertical double gate positions
         for i, j in np.ndindex(self.nrows-1, self.ncols):
+            if i == 0 or i == self.nrows - 2:
+                continue
+            if j == 0 or j == self.ncols - 1:
+                continue
             yield (i*self.ncols+j, (i+1)*self.ncols+j)
     
     def trotter_steps(self):
@@ -71,6 +79,21 @@ def run_peps(tfi, steps, normfreq, backend, threshold, maxrank):
     return qstate
 
 
+def run_full_update(tfi, steps, normfreq, backend, threshold, maxrank):
+    from koala.peps.update import apply_full_update
+    qstate = peps.computational_zeros(tfi.nrows, tfi.ncols, backend=backend)
+    for i in range(steps):
+        for operator, sites in tfi.trotter_steps():
+            if len(sites) == 1:
+                qstate.apply_operator(operator, sites, threshold=threshold, maxrank=maxrank)
+            else:
+                apply_full_update(qstate, operator, divmod(sites[0], qstate.ncol), divmod(sites[1], qstate.ncol), rank=maxrank)
+        if i % normfreq == 0:
+            qstate /= qstate.norm()
+    qstate /= qstate.norm()
+    return qstate
+
+
 def main(args):
     tfi = TraversalFieldIsing(args.coupling, args.field, args.nrow, args.ncol, args.tau, args.backend)
 
@@ -89,6 +112,14 @@ def main(args):
     t = time.process_time()
     peps_energy = peps_qstate.expectation(tfi.observable, use_cache=True)
     peps_expectation_time = time.process_time() - t
+
+    t = time.process_time()
+    fu_qstate = run_full_update(tfi, args.steps, args.normfreq, backend=args.backend, threshold=args.threshold, maxrank=args.maxrank)
+    fu_ite_time = time.process_time() - t
+
+    t = time.process_time()
+    fu_energy = fu_qstate.expectation(tfi.observable, use_cache=True)
+    fu_expectation_time = time.process_time() - t
 
     backend = tensorbackends.get(args.backend)
 
@@ -110,12 +141,15 @@ def main(args):
 
         print('result.statevector_energy', statevector_energy)
         print('result.peps_energy', peps_energy)
+        print('result.fu_energy', fu_energy)
 
         print('result.statevector_ite_time', statevector_ite_time)
         print('result.peps_ite_time', peps_ite_time)
+        print('result.fu_ite_time', fu_ite_time)
 
         print('result.statevector_expectiation_time', statevector_expectiation_time)
         print('result.peps_expectation_time', peps_expectation_time)
+        print('result.fu_expectation_time', fu_expectation_time)
 
 
 def build_cli_parser():
