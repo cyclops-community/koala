@@ -96,6 +96,7 @@ def apply_full_update(state, operator, pos1, pos2, rank, epsilon=1e-5, reg=1e-7)
         sites_w_operator = backend.einsum("abczl,fzdem,lmop->abcdefop", site1, site2, operator)
         rhs = backend.einsum(f"{env_str},abcdefop->opABCDEF", *env, sites_w_operator)
         site1, s, site2 = backend.einsvd("abcdefop->abclo,fldep", sites_w_operator)
+        site1, s, site2 = truncate(backend, site1, s, site2, 3, 1, threshold=None, maxrank=rank)
         s **= 0.5
         site1 = backend.einsum('abclo,l->abclo', site1, s)
         site2 = backend.einsum('fldep,l->fldep', site2, s)
@@ -111,6 +112,7 @@ def apply_full_update(state, operator, pos1, pos2, rank, epsilon=1e-5, reg=1e-7)
         sites_w_operator = backend.einsum("bczal,zdefm,lmop->abcdefop", site1, site2, operator)
         rhs = backend.einsum(f"{env_str},abcdefop->opABCDEF", *env, sites_w_operator)
         site1, s, site2 = backend.einsvd("abcdefop->bclao,ldefp", sites_w_operator)
+        site1, s, site2 = truncate(backend, site1, s, site2, 2, 0, threshold=None, maxrank=rank)
         s **= 0.5
         site1 = backend.einsum('bclao,l->bclao', site1, s)
         site2 = backend.einsum('ldefp,l->ldefp', site2, s)
@@ -141,8 +143,8 @@ def low_rank_update_step(backend, env, rhs, site1, site2, mode='horizontal', reg
     inv_env_site = backend.inv(env_site_reg).reshape(*env_tensor_shape)
     site1_new = backend.einsum(f"oABCL,ABCLabcl->{site_strs[2]}", rhs_site, inv_env_site)
     # update site2
-    env_site = backend.einsum(f"{env_str},{site_strs[2]},{site_strs[3]}->deflDEFL", *env, site2, site2)
-    rhs_site = backend.einsum(f"opABCDEF,{site_strs[3]}->pDEFL", rhs, site2)
+    env_site = backend.einsum(f"{env_str},{site_strs[2]},{site_strs[3]}->deflDEFL", *env, site1, site1)
+    rhs_site = backend.einsum(f"opABCDEF,{site_strs[3]}->pDEFL", rhs, site1)
     length = env_site.shape[0] * env_site.shape[1] * env_site.shape[2] * env_site.shape[3]
     env_tensor_shape = env_site.shape
     env_site = env_site.reshape((length, length))
