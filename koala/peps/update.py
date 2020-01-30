@@ -100,11 +100,11 @@ def apply_full_update(state, operator, pos1, pos2, rank, epsilon=1e-5, reg=1e-7)
         s **= 0.5
         site1 = backend.einsum('abclo,l->abclo', site1, s)
         site2 = backend.einsum('fldep,l->fldep', site2, s)
-        residual = 1.
-        while residual > epsilon:
+        rel_residual = 1.
+        while rel_residual > epsilon:
             site1_new, site2_new = low_rank_update_step(backend, env, rhs, site1, site2, mode='horizontal', reg=reg)
             # check the residual
-            residual = backend.norm(site1_new - site1) + backend.norm(site2_new - site2)
+            rel_residual = backend.norm(site1_new - site1) / backend.norm(site1) + backend.norm(site2_new - site2) / backend.norm(site2)
             site1, site2 = site1_new, site2_new
     else:
         assert pos2[0] == pos1[0] + 1 and pos2[1] == pos1[1]
@@ -116,11 +116,11 @@ def apply_full_update(state, operator, pos1, pos2, rank, epsilon=1e-5, reg=1e-7)
         s **= 0.5
         site1 = backend.einsum('bclao,l->bclao', site1, s)
         site2 = backend.einsum('ldefp,l->ldefp', site2, s)
-        residual = 1.
-        while residual > epsilon:
+        rel_residual = 1.
+        while rel_residual > epsilon:
             site1_new, site2_new = low_rank_update_step(backend, env, rhs, site1, site2, mode='vertical', reg=reg)
             # check the residual
-            residual = backend.norm(site1_new - site1) + backend.norm(site2_new - site2)
+            rel_residual = backend.norm(site1_new - site1) / backend.norm(site1) + backend.norm(site2_new - site2) / backend.norm(site2)
             site1, site2 = site1_new, site2_new
     state.grid[pos1], state.grid[pos2] = site1, site2
     return state
