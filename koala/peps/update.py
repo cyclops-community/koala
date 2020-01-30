@@ -88,7 +88,7 @@ def apply_full_update(state, operator, pos1, pos2, rank, epsilon=1e-5, reg=1e-7)
     """
     site1, site2 = state[pos1], state[pos2]
     backend = state.backend
-    env_str = "0aA1,1bB2,2cC3,3dD4,4eE5,5fF0"
+    env_str = "01aA,12bB,23cC,34dD,45eE,50fF"
 
     if pos2[0] == pos1[0]:
         assert pos2[1] == pos1[1] + 1
@@ -107,7 +107,7 @@ def apply_full_update(state, operator, pos1, pos2, rank, epsilon=1e-5, reg=1e-7)
             residual = backend.norm(site1_new - site1) + backend.norm(site2_new - site2)
             site1, site2 = site1_new, site2_new
     else:
-        assert pos2[0] == pos1[0] + 1 and pos2[1] == pos1[0]
+        assert pos2[0] == pos1[0] + 1 and pos2[1] == pos1[1]
         env = get_vertical_local_pair_env(state, pos1)
         sites_w_operator = backend.einsum("bczal,zdefm,lmop->abcdefop", site1, site2, operator)
         rhs = backend.einsum(f"{env_str},abcdefop->opABCDEF", *env, sites_w_operator)
@@ -127,7 +127,7 @@ def apply_full_update(state, operator, pos1, pos2, rank, epsilon=1e-5, reg=1e-7)
 
 
 def low_rank_update_step(backend, env, rhs, site1, site2, mode='horizontal', reg=1e-7):
-    env_str = "0aA1,1bB2,2cC3,3dD4,4eE5,5fF0"
+    env_str = "01aA,12bB,23cC,34dD,45eE,50fF"
     if mode == 'vertical':
         site_strs = ['ldefp', 'LDEFp', 'bclao', 'BCLAo']
     elif mode == 'horizontal':
