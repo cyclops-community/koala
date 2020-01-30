@@ -49,7 +49,13 @@ def generate(nrow, ncol, nlayer, seed):
 
 
 def get_average_bond_dim(peps):
-    return mean(chain.from_iterable(site.shape[0:4] for _, site in np.ndenumerate(peps.grid)))
+    s = 0
+    for (i,j), tsr in np.ndenumerate(peps.grid):
+        if i > 0: s += tsr.shape[0]
+        if j > 0: s += tsr.shape[1]
+        if i < peps.nrow - 1: s += tsr.shape[2]
+        if j < peps.ncol - 1: s += tsr.shape[3]
+    return s / (2 * peps.nrow * peps.ncol - peps.nrow - peps.ncol) / 2
 
 def get_max_bond_dim(peps):
     return max(chain.from_iterable(site.shape[0:4] for _, site in np.ndenumerate(peps.grid)))
