@@ -84,19 +84,17 @@ class PEPS(object):
     """
             
     def __init__(self, tensors, PEPS_like=None, backend=None):
-        transpose = True
         if isinstance(tensors, PEPS):
             PEPS_like = PEPS_like or tensors
         if PEPS_like is not None:
             backend = backend or PEPS_like._backend
-            transpose = False
         self._backend = tbs.get(backend or 'numpy')
 
         self._tn = np.empty(tensors.shape, dtype=object)
         for idx, tsr in np.ndenumerate(tensors):
             # self._tn[i,j] = self._backend.tensor(tensors[i,j], None, pseudo_idx, backend=backend, copy=copy)
             # self._tn[i,j].insert_pseudo(*range(self._tn[i,j].vndim, 6))
-            self._tn[idx] = tsr.transpose(*((0, 3, 2, 1) + tuple(range(4, tsr.ndim)))) if transpose else tsr.copy()
+            self._tn[idx] = tsr.copy()
             self._tn[idx] = self._tn[idx].reshape(*(self._tn[idx].shape + tuple([1] * (6 - tsr.ndim))))
 
 
