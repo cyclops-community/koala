@@ -63,11 +63,18 @@ def get_max_bond_dim(peps):
 def run_peps(circuit, threshold, maxrank, backend):
     rank = tensorbackends.get(backend).rank
     qstate = koala.peps.computational_zeros(circuit.nrow, circuit.ncol, backend=backend)
+    is_ctf = backend in {'ctf', 'ctfview'}
+    if is_ctf:
+        import ctf
+        ctf.initialize_flops_counter()
     for i, layer in enumerate(circuit.gates):
         t = time.process_time()
         qstate.apply_circuit(layer, threshold=threshold, maxrank=maxrank)
         t = time.process_time() - t
         if rank == 0: print(f'layer_time_{i}', t, flush=True)
+        if rank == 0 and is_ctf:
+            print(f'layer_flops_{i}', ctf.get_estimated_flops(), flush=True)
+            ctf.initialize_flops_counter()
         if rank == 0: print(f'average_bond_dim_{i}', get_average_bond_dim(qstate), flush=True)
         if rank == 0: print(f'max_bond_dim_{i}', get_max_bond_dim(qstate), flush=True)
     return qstate
