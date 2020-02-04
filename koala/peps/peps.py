@@ -121,9 +121,9 @@ class PEPS(QuantumState):
             internal_bonds = []
             external_bonds = [4]
             (external_bonds if i == 0 else internal_bonds).append(0)
-            (external_bonds if j == 0 else internal_bonds).append(1)
+            (external_bonds if j == self.shape[1] - 1 else internal_bonds).append(1)
             (external_bonds if i == self.shape[0] - 1 else internal_bonds).append(2)
-            (external_bonds if j == self.shape[1] - 1 else internal_bonds).append(3)
+            (external_bonds if j == 0 else internal_bonds).append(3)
             grid[i, j] = tn_add(self.backend, self[i, j], other[i, j], internal_bonds, external_bonds, 1, coeff)
         return PEPS(grid, self.backend)
 
