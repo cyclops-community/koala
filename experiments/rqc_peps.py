@@ -54,7 +54,7 @@ def get_average_bond_dim(peps):
         if i > 0: s += tsr.shape[0]
         if j < peps.ncol - 1: s += tsr.shape[1]
         if i < peps.nrow - 1: s += tsr.shape[2]
-        if j > 0: s += tsr.shape[3]]
+        if j > 0: s += tsr.shape[3]
     return s / (2 * peps.nrow * peps.ncol - peps.nrow - peps.ncol) / 2
 
 def get_max_bond_dim(peps):
