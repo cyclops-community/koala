@@ -54,20 +54,34 @@ def get_average_bond_dim(peps):
         if i > 0: s += tsr.shape[0]
         if j < peps.ncol - 1: s += tsr.shape[1]
         if i < peps.nrow - 1: s += tsr.shape[2]
-        if j > 0: s += tsr.shape[3]]
+        if j > 0: s += tsr.shape[3]
     return s / (2 * peps.nrow * peps.ncol - peps.nrow - peps.ncol) / 2
 
-def get_max_bond_dim(peps):
-    return max(chain.from_iterable(site.shape[0:4] for _, site in np.ndenumerate(peps.grid)))
+def random_peps(nrow, ncol, rank, backend):
+    import numpy as np
+    import tensorbackends
+    backend = tensorbackends.get(backend)
+    grid = np.empty((nrow, ncol), dtype=object)
+    for i, j in np.ndindex(nrow, ncol):
+        shape = (
+            rank if i > 0 else 1,
+            rank if j < ncol - 1 else 1,
+            rank if i < nrow - 1 else 1,
+            rank if j > 0 else 1,
+            2,
+        )
+        grid[i, j] = backend.random.uniform(-1,1,shape) + 1j * backend.random.uniform(-1,1,shape)
+    return koala.peps.PEPS(grid, backend)
 
 def run_peps(circuit, threshold, maxrank, backend):
     rank = tensorbackends.get(backend).rank
-    qstate = koala.peps.computational_zeros(circuit.nrow, circuit.ncol, backend=backend)
+    qstate = random_peps(circuit.nrow, circuit.ncol, maxrank, backend=backend)
     is_ctf = backend in {'ctf', 'ctfview'}
     if is_ctf:
         import ctf
         ctf.initialize_flops_counter()
     for i, layer in enumerate(circuit.gates):
+        if rank == 0: print(f'average_bond_dim_{i}', get_average_bond_dim(qstate), flush=True)
         t = time.process_time()
         qstate.apply_circuit(layer, threshold=threshold, maxrank=maxrank)
         t = time.process_time() - t
@@ -75,8 +89,6 @@ def run_peps(circuit, threshold, maxrank, backend):
         if rank == 0 and is_ctf:
             print(f'layer_flops_{i}', ctf.get_estimated_flops(), flush=True)
             ctf.initialize_flops_counter()
-        if rank == 0: print(f'average_bond_dim_{i}', get_average_bond_dim(qstate), flush=True)
-        if rank == 0: print(f'max_bond_dim_{i}', get_max_bond_dim(qstate), flush=True)
     return qstate
 
 
@@ -110,7 +122,7 @@ def build_cli_parser():
 
     parser.add_argument('-b', '--backend', help='the backend to use', choices=['numpy', 'ctf', 'ctfview'], default='numpy')
     parser.add_argument('-th', '--threshold', help='the threshold in trucated SVD when applying gates', type=float, default=1e-5)
-    parser.add_argument('-mr', '--maxrank', help='the maxrank in trucated SVD when applying gates', type=int, default=None)
+    parser.add_argument('-mr', '--maxrank', help='the maxrank in trucated SVD when applying gates', type=int, default=2)
 
     return parser
 
