@@ -4,12 +4,12 @@ def apply_single_site_operator(state, operator, position):
     state.grid[position] = state.backend.einsum('ijklx,xy->ijkly', state.grid[position], operator)
 
 
-def apply_local_pair_operator(state, operator, positions, threshold, maxrank):
+def apply_local_pair_operator(state, operator, positions, threshold, maxrank, randomized_svd):
     assert len(positions) == 2
-    if maxrank is None:
-        apply_local_pair_operator_direct_svd(state, operator, positions, threshold, maxrank)
-    else:
+    if maxrank is not None and randomized_svd:
         apply_local_pair_operator_randomized_svd(state, operator, positions, threshold, maxrank)
+    else:
+        apply_local_pair_operator_direct_svd(state, operator, positions, threshold, maxrank)
 
 
 def apply_local_pair_operator_direct_svd(state, operator, positions, threshold, maxrank):
