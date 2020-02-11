@@ -50,9 +50,9 @@ def run_statevector(circuit, backend):
     qstate.apply_circuit(circuit.gates)
     return qstate
 
-def run_peps(circuit, threshold, maxrank, backend):
+def run_peps(circuit, threshold, maxrank, randomized_svd, backend):
     qstate = koala.peps.computational_zeros(circuit.nrow, circuit.ncol, backend=backend)
-    qstate.apply_circuit(circuit.gates, threshold=threshold, maxrank=maxrank)
+    qstate.apply_circuit(circuit.gates, threshold=threshold, maxrank=maxrank, randomized_svd=randomized_svd)
     return qstate
 
 
@@ -65,7 +65,7 @@ def main(args):
     statevector_time = time.process_time() - t
 
     t = time.process_time()
-    qstate_peps = run_peps(circuit, backend=args.backend, threshold=args.threshold, maxrank=args.maxrank)
+    qstate_peps = run_peps(circuit, backend=args.backend, threshold=args.threshold, maxrank=args.maxrank, randomized_svd=args.randomized_svd)
     peps_time = time.process_time() - t
 
     t = time.process_time()
@@ -107,8 +107,9 @@ def build_cli_parser():
     parser.add_argument('-s', '--seed', help='random circuit seed', type=int, default=0)
 
     parser.add_argument('-b', '--backend', help='the backend to use', choices=['numpy', 'ctf', 'ctfview'], default='numpy')
-    parser.add_argument('-th', '--threshold', help='the threshold in trucated SVD when applying gates', type=float, default=1e-5)
-    parser.add_argument('-mr', '--maxrank', help='the maxrank in trucated SVD when applying gates', type=int, default=None)
+    parser.add_argument('-th', '--threshold', help='the threshold in truncated SVD when applying gates', type=float, default=1e-5)
+    parser.add_argument('-mr', '--maxrank', help='the maxrank in truncated SVD when applying gates', type=int, default=None)
+    parser.add_argument('-rsvd', '--randomized_svd', help='use randomized SVD when applying gates', default=False, action='store_true')
 
     return parser
 
