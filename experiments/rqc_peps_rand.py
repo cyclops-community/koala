@@ -74,12 +74,19 @@ def random_peps(nrow, ncol, rank, backend):
     return koala.peps.PEPS(grid, backend)
 
 def run_peps(circuit, threshold, maxrank, randomized_svd, backend):
-    rank = tensorbackends.get(backend).rank
-    qstate = random_peps(circuit.nrow, circuit.ncol, maxrank, backend=backend)
     is_ctf = backend in {'ctf', 'ctfview'}
+
     if is_ctf:
         import ctf
+        timer_epoch = ctf.timer_epoch('run_peps')
+        timer_epoch.begin()
+
+    rank = tensorbackends.get(backend).rank
+    qstate = random_peps(circuit.nrow, circuit.ncol, maxrank, backend=backend)
+
+    if is_ctf:
         ctf.initialize_flops_counter()
+
     for i, layer in enumerate(circuit.gates):
         if rank == 0: print(f'average_bond_dim_{i}', get_average_bond_dim(qstate), flush=True)
         t = time.process_time()
@@ -89,6 +96,10 @@ def run_peps(circuit, threshold, maxrank, randomized_svd, backend):
         if rank == 0 and is_ctf:
             print(f'layer_flops_{i}', ctf.get_estimated_flops(), flush=True)
             ctf.initialize_flops_counter()
+
+    if is_ctf:
+        timer_epoch.end()
+
     return qstate
 
 
@@ -122,7 +133,7 @@ def build_cli_parser():
 
     parser.add_argument('-b', '--backend', help='the backend to use', choices=['numpy', 'ctf', 'ctfview'], default='numpy')
     parser.add_argument('-th', '--threshold', help='the threshold in truncated SVD when applying gates', type=float, default=1e-5)
-    parser.add_argument('-mr', '--maxrank', help='the maxrank in truncated SVD when applying gates', type=int, default=None)
+    parser.add_argument('-mr', '--maxrank', help='the maxrank in truncated SVD when applying gates', type=int, default=1)
     parser.add_argument('-rsvd', '--randomized_svd', help='use randomized SVD when applying gates', default=False, action='store_true')
 
     return parser
