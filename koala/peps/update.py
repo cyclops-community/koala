@@ -1,7 +1,7 @@
 from string import ascii_letters as chars
 
 def apply_single_site_operator(state, operator, position):
-    state.grid[position] = state.backend.einsum('ijklx,xy->ijkly', state.grid[position], operator)
+    state.grid[position] = state.backend.einsum('ijklxp,xy->ijklyp', state.grid[position], operator)
 
 
 def apply_local_pair_operator(state, operator, positions, threshold, maxrank, randomized_svd):
@@ -17,25 +17,25 @@ def apply_local_pair_operator_direct_svd(state, operator, positions, threshold, 
     x, y = state.grid[x_pos], state.grid[y_pos]
 
     if x_pos[0] < y_pos[0]: # [x y]^T
-        prod_subscripts = 'abcdx,cfghy,xyuv->abndu,nfghv'
-        scale_u_subscripts = 'absdu,s->absdu'
-        scale_v_subscripts = 'sbcdv,s->sbcdv'
+        prod_subscripts = 'abcdxp,cfghyq,xyuv->abndup,nfghvq'
+        scale_u_subscripts = 'absdup,s->absdup'
+        scale_v_subscripts = 'sbcdvp,s->sbcdvp'
         link = (2, 0)
     elif x_pos[0] > y_pos[0]: # [y x]^T
-        prod_subscripts = 'abcdx,efahy,xyuv->nbcdu,efnhv'
+        prod_subscripts = 'abcdxp,efahyq,xyuv->nbcdup,efnhvq'
         link = (0, 2)
-        scale_u_subscripts = 'sbcdu,s->sbcdu'
-        scale_v_subscripts = 'absdv,s->absdv'
+        scale_u_subscripts = 'sbcdup,s->sbcdup'
+        scale_v_subscripts = 'absdvp,s->absdvp'
     elif x_pos[1] < y_pos[1]: # [x y]
-        prod_subscripts = 'abcdx,efgby,xyuv->ancdu,efgnv'
+        prod_subscripts = 'abcdxp,efgbyq,xyuv->ancdup,efgnvq'
         link = (1, 3)
-        scale_u_subscripts = 'ascdu,s->ascdu'
-        scale_v_subscripts = 'abcsv,s->abcsv'
+        scale_u_subscripts = 'ascdup,s->ascdup'
+        scale_v_subscripts = 'abcsvp,s->abcsvp'
     elif x_pos[1] > y_pos[1]: # [y x]
-        prod_subscripts = 'abcdx,edghy,xyuv->abcnu,enghv'
+        prod_subscripts = 'abcdxp,edghyq,xyuv->abcnup,enghvq'
         link = (3, 1)
-        scale_u_subscripts = 'abcsu,s->abcsu'
-        scale_v_subscripts = 'ascdv,s->ascdv'
+        scale_u_subscripts = 'abcsup,s->abcsup'
+        scale_v_subscripts = 'ascdvp,s->ascdvp'
     else:
         assert False
 
