@@ -68,7 +68,7 @@ def random_peps(nrow, ncol, rank, backend):
             rank if j < ncol - 1 else 1,
             rank if i < nrow - 1 else 1,
             rank if j > 0 else 1,
-            2,
+            1, 2,
         )
         grid[i, j] = backend.random.uniform(-1,1,shape) + 1j * backend.random.uniform(-1,1,shape)
     return koala.peps.PEPS(grid, backend)
