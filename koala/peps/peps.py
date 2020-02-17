@@ -59,21 +59,21 @@ class PEPS(QuantumState):
             grid[idx] = tensor.conj()
         return PEPS(grid, self.backend)
 
-    def apply_gate(self, gate, threshold=None, maxrank=None):
+    def apply_gate(self, gate, threshold=None, maxrank=None, randomized_svd=False):
         tensor = tensorize(self.backend, gate.name, *gate.parameters)
-        self.apply_operator(tensor, gate.qubits, threshold=threshold, maxrank=maxrank)
+        self.apply_operator(tensor, gate.qubits, threshold=threshold, maxrank=maxrank, randomized_svd=randomized_svd)
 
-    def apply_circuit(self, gates, threshold=None, maxrank=None):
+    def apply_circuit(self, gates, threshold=None, maxrank=None, randomized_svd=False):
         for gate in gates:
-            self.apply_gate(gate, threshold=threshold, maxrank=maxrank)
+            self.apply_gate(gate, threshold=threshold, maxrank=maxrank, randomized_svd=randomized_svd)
 
-    def apply_operator(self, operator, sites, threshold=None, maxrank=None):
+    def apply_operator(self, operator, sites, threshold=None, maxrank=None, randomized_svd=False):
         operator = self.backend.astensor(operator)
         positions = [divmod(site, self.ncol) for site in sites]
         if len(positions) == 1:
             update.apply_single_site_operator(self, operator, positions[0])
         elif len(positions) == 2 and is_two_local(*positions):
-            update.apply_local_pair_operator(self, operator, positions, threshold, maxrank)
+            update.apply_local_pair_operator(self, operator, positions, threshold, maxrank, randomized_svd)
         else:
             raise ValueError('nonlocal operator is not supported')
 
