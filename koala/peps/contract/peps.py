@@ -102,21 +102,21 @@ class PEPS(object):
         new_tn = np.empty_like(self._tn)
         for idx, tsr in np.ndenumerate(self._tn):
             new_tn[idx] = abs(tsr)
-        return PEPS(new_tn, self)
+        return PEPS(new_tn, self.backend)
 
     def __add__(self, other):
         if np.isscalar(other):
             new_tn = np.empty_like(self._tn)
             for idx, tsr in np.ndenumerate(self._tn):
                 new_tn[idx] = tsr + other
-            return PEPS(new_tn, self)
+            return PEPS(new_tn, self.backend)
         if isinstance(other, PEPS):
             if self.shape != other.shape:
                 raise ValueError("PEPS: addends need to have the same shape")
             new_tn = np.empty_like(self._tn)
             for idx, tsr in np.ndenumerate(self._tn):
                 new_tn[idx] = tsr + other._tn[idx]
-            return PEPS(new_tn, self)
+            return PEPS(new_tn, self.backend)
         raise NotImplementedError()
 
     def __contains__(self, item):
@@ -130,7 +130,7 @@ class PEPS(object):
                     item = item.reshape(1, -1)
                 else:
                     item = item.reshape(-1, 1)
-            return PEPS(item, self)
+            return PEPS(item, self.backend)
         return item
 
     def __getattr__(self, attr):
@@ -147,14 +147,14 @@ class PEPS(object):
             new_tn = np.empty_like(self._tn)
             for idx, tsr in np.ndenumerate(self._tn):
                 new_tn[idx] = tsr * other
-            return PEPS(new_tn, self)
+            return PEPS(new_tn, self.backend)
         raise NotImplementedError()
 
     def __neg__(self):
         new_tn = np.empty_like(self._tn)
         for idx, tsr in np.ndenumerate(self._tn):
             new_tn[idx] = -tsr
-        return PEPS(new_tn, self)
+        return PEPS(new_tn, self.backend)
 
     def __radd__(self, other):
         return self + other
@@ -176,14 +176,14 @@ class PEPS(object):
             new_tn = np.empty_like(self._tn)
             for idx, tsr in np.ndenumerate(self._tn):
                 new_tn[idx] = tsr - other
-            return PEPS(new_tn, self)
+            return PEPS(new_tn, self.backend)
         if isinstance(other, PEPS):
             if self.shape != other.shape:
                 raise ValueError("PEPS: subtrahend and minuend need to have the same shape")
             new_tn = np.empty_like(self._tn)
             for idx, tsr in np.ndenumerate(self._tn):
                 new_tn[idx] = tsr - other._tn[idx]
-            return PEPS(new_tn, self)
+            return PEPS(new_tn, self.backend)
         raise NotImplementedError()
 
     def __str__(self):
@@ -269,7 +269,7 @@ class PEPS(object):
         tn = np.empty_like(A)
         for (idx, a), b in zip(np.ndenumerate(A), B.flat):
             tn[idx] = self._tensor_dot(a, b, 'z')
-        return PEPS(tn, self)
+        return PEPS(tn, self.backend)
 
     def concatenate(self, B, axis=0):
         """
@@ -288,7 +288,7 @@ class PEPS(object):
         output: PEPS
             The concatenated PEPS.
         """
-        return PEPS(np.concatenate((self._tn, B._tn), axis), self)
+        return PEPS(np.concatenate((self._tn, B._tn), axis), self.backend)
 
     def conjugate(self):
         """
@@ -302,7 +302,7 @@ class PEPS(object):
         tn = np.empty_like(self._tn)
         for idx, tsr in np.ndenumerate(self._tn):
             tn[idx] = tsr.conj()
-        return PEPS(tn, self)
+        return PEPS(tn, self.backend)
 
     def contract(self, approach='MPS', **svdargs):
         """
@@ -421,7 +421,7 @@ class PEPS(object):
         if new_tn.shape == (1, 1):
             return new_tn[0,0].item() if new_tn[0,0].size == 1 else new_tn[0,0]
         # alternate the neighboring relationship and contract recursively
-        return PEPS(new_tn, self).rotate().contract_squares(**svdargs)
+        return PEPS(new_tn, self.backend).rotate().contract_squares(**svdargs)
 
     def contract_to_MPS(self, horizontal=False, mps_mult_mpo=None, **svdargs):
         """
@@ -451,7 +451,7 @@ class PEPS(object):
         for mpo in self._tn[1:]:
             mps = mps_mult_mpo(mps, mpo, **svdargs)
         mps = mps.reshape(1, -1)
-        p = PEPS(mps, self)
+        p = PEPS(mps, self.backend)
         return p.rotate() if horizontal else p
 
     def contract_TRG(self, **svdargs):
@@ -496,7 +496,7 @@ class PEPS(object):
         tn = np.empty_like(self)
         for idx, tsr in np.ndenumerate(self):
             tn[idx] = tsr.coy()
-        return PEPS(tn, self)
+        return PEPS(tn, self.backend)
 
     def dagger(self):
         """
@@ -530,7 +530,7 @@ class PEPS(object):
                 tn[idx] = tsr.transpose(0, 1, 2, 3, 5, 4)
             else:
                 tn[idx] = tsr.copy()
-        return PEPS(tn, self)
+        return PEPS(tn, self.backend)
 
     def inner(self, B):
         """
@@ -575,7 +575,7 @@ class PEPS(object):
             tn = np.rot90(tn)
             for idx, tsr in np.ndenumerate(tn):
                 tn[idx] = tsr.transpose(1, 2, 3, 0, 4, 5)
-        return PEPS(tn, self)
+        return PEPS(tn, self.backend)
 
     # def switch_backend(self, backend):
     #     """
@@ -603,7 +603,7 @@ class PEPS(object):
     #     tn = self._tn.T
     #     for idx, tsr in np.ndenumerate(tn):
     #         tn[idx] = tsr.transpose(3, 2, 1, 0, 4, 5)
-    #     return PEPS(tn, self)
+    #     return PEPS(tn, self.backend)
 
     def _contract_TRG(self, tn, **svdargs):
         # base case
@@ -611,7 +611,7 @@ class PEPS(object):
             p = np.empty((2, 2), dtype=object)
             for i, j in np.ndindex((2, 2)):
                 p[i,j] = self._backend.einsum('abipq,icdPQ->abcdp+Pq+Q' if (i+j) % 2 == 0 else 'aidpq,bciPQ->abcdp+Pq+Q', tn[i,j][0], tn[i,j][1])
-            return PEPS(p, self).contract_BMPS()
+            return PEPS(p, self.backend).contract_BMPS()
         
         # contract specific horizontal and vertical bonds and SVD truncate the generated squared bonds
         for i, j in np.ndindex(tn.shape[:2]):
