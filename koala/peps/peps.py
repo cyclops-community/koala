@@ -270,7 +270,7 @@ class PEPS(QuantumState):
             return self.contract_squares(**svdargs)
         elif approach in ['trg', 'terg']:
             return self.contract_TRG(**svdargs)
-        elif approach in ['snake', 'snakes']:
+        elif approach in ['s', 'snake', 'snakes']:
             return self.contract_snake()
 
     def contract_BMPS(self, mps_mult_mpo=None, **svdargs):
@@ -339,23 +339,27 @@ class PEPS(QuantumState):
         return env_peps
 
     def contract_snake(self):
-        grid = self.grid
-        # tsr = PEPS(grid[0].reshape(1, -1)).contract_BMPS()
-        head = grid[0,0]
-        for tsr in grid[0,1:]:
-            head = self._tensor_dot(head, tsr, 'y')
-        for i, mps in enumerate(grid[1:]):
-            head = head.transpose(2, 1, 0, 3, 4, 5)
-            # str_left = ''.join([chars[i] for i in tsr.ndim]) + ',' + ''.join(chars[tsr.ndim-1:tsr.ndim+5])
-            # self.backend.einsum(str_left + '->' + str_left.replace(chars[tsr.ndim-1], '').replace(',', ''), tsr, mps[0 if i % 2 else -1])
-            for tsr in mps[::2 * (i % 2) - 1]:
+        """
+        Contract the PEPS by contracting sites in the row-major order.
+
+        Returns
+        -------
+        output: self.backend.tensor or scalar
+            The contraction result.
+
+        References
+        ----------
+        https://arxiv.org/pdf/1905.08394.pdf
+        """
+        head = self.grid[0,0]
+        for i, mps in enumerate(self.grid):
+            for tsr in mps[int(i==0):]:
                 head = self.backend.einsum('agbcdef->a(gb)cdef', 
                 head.reshape((head.shape[0] // tsr.shape[0], tsr.shape[0]) + head.shape[1:]))
-                tsr = self.backend.einsum('agbcdef->a' + ('bc(gd)ef' if i % 2 else 'dc(gb)ef'), tsr.reshape((1,) + tsr.shape))
+                tsr = self.backend.einsum('agbcdef->abc(gd)ef', tsr.reshape((1,) + tsr.shape))
                 head = self._tensor_dot(head, tsr, 'y')
-        return head.item() if head.size == 1 else head.reshape(
-            *[int(head.size ** (1 / self.grid.size))] * self.grid.size
-            ).transpose(*[(i+1)*self.ncol-j-1 if i % 2 else i*self.ncol+j for i, j in np.ndindex(*self.shape)])
+            head = head.transpose(2, 1, 0, 3, 4, 5)
+        return head.item() if head.size == 1 else head.reshape(*[int(head.size ** (1 / self.grid.size))] * self.grid.size)
 
     def contract_squares(self, **svdargs):
         """
