@@ -57,21 +57,6 @@ def get_average_bond_dim(peps):
         if j > 0: s += tsr.shape[3]
     return s / (2 * peps.nrow * peps.ncol - peps.nrow - peps.ncol) / 2
 
-def random_peps(nrow, ncol, rank, backend):
-    import numpy as np
-    import tensorbackends
-    backend = tensorbackends.get(backend)
-    grid = np.empty((nrow, ncol), dtype=object)
-    for i, j in np.ndindex(nrow, ncol):
-        shape = (
-            rank if i > 0 else 1,
-            rank if j < ncol - 1 else 1,
-            rank if i < nrow - 1 else 1,
-            rank if j > 0 else 1,
-            1, 2,
-        )
-        grid[i, j] = backend.random.uniform(-1,1,shape) + 1j * backend.random.uniform(-1,1,shape)
-    return koala.peps.PEPS(grid, backend)
 
 def run_peps(circuit, threshold, maxrank, randomized_svd, backend):
     is_ctf = backend in {'ctf', 'ctfview'}
@@ -82,7 +67,7 @@ def run_peps(circuit, threshold, maxrank, randomized_svd, backend):
         timer_epoch.begin()
 
     rank = tensorbackends.get(backend).rank
-    qstate = random_peps(circuit.nrow, circuit.ncol, maxrank, backend=backend)
+    qstate = koala.peps.random(circuit.nrow, circuit.ncol, maxrank, backend=backend)
 
     if is_ctf:
         ctf.initialize_flops_counter()
