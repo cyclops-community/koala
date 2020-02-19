@@ -34,7 +34,7 @@ def reduce_z(a, b):
     return a.backend.einsumsvd('abcdpi,ABCDiq->abcdpI,ABCDIq', a, b)
 
 
-def rotate_x(a):
+def rotate_x(a, n=1):
     p = np.roll([4, 1, 5, 3], n)
     return a.transpose(0, p[1], 2, p[3], p[0], p[2])
 

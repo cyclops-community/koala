@@ -166,7 +166,7 @@ class PEPS(QuantumState):
         return e
 
     def contract(self, approach='MPS', **svdargs):
-        return contraction.contract(self, approach='MPS', **svdargs)
+        return contraction.contract(self, approach=approach, **svdargs)
 
     def inner(self, other):
         return self.dagger().apply(other).contract()
