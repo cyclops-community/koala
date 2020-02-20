@@ -67,6 +67,7 @@ def run_peps(tfi, steps, normfreq, backend, threshold, maxrank, randomized_svd):
             qstate.apply_operator(operator, sites, threshold=threshold, maxrank=maxrank, randomized_svd=randomized_svd)
         if i % normfreq == 0:
             qstate.site_normalize()
+    qstate /= qstate.norm()
     return qstate
 
 

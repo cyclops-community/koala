@@ -77,6 +77,14 @@ class PEPS(QuantumState):
         else:
             raise ValueError('nonlocal operator is not supported')
 
+    def site_normalize(self, *sites):
+        """Normalize site-wise."""
+        if not sites:
+            sites = range(self.nsite)
+        for site in sites:
+            pos = divmod(site, self.ncol)
+            self.grid[pos] /= self.backend.norm(self.grid[pos])
+
     def __add__(self, other):
         if isinstance(other, PEPS) and self.backend == other.backend:
             return self.add(other)
@@ -197,7 +205,7 @@ class PEPS(QuantumState):
     def concatenate(self, other, axis=0):
         """
         Concatenate two PEPS along the given axis.
-        
+
         Parameters
         ----------
         other: PEPS
