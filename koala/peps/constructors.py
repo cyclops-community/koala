@@ -39,7 +39,7 @@ def random(nrow, ncol, rank, backend='numpy'):
             rank if j < ncol - 1 else 1,
             rank if i < nrow - 1 else 1,
             rank if j > 0 else 1,
-            1, 2,
+            2, 1,
         )
         grid[i, j] = backend.random.uniform(-1,1,shape) + 1j * backend.random.uniform(-1,1,shape)
     return PEPS(grid, backend)
