@@ -1,4 +1,3 @@
-from string import ascii_letters as chars
 
 def apply_single_site_operator(state, operator, position):
     state.grid[position] = state.backend.einsum('ijklxp,xy->ijklyp', state.grid[position], operator)
