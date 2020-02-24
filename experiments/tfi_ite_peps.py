@@ -55,10 +55,13 @@ def run_peps(tfi, steps, normfreq, backend, threshold, maxrank, randomized_svd):
         import ctf
         timer_epoch = ctf.timer_epoch('run_peps')
         timer_epoch.begin()
+        ctf.initialize_flops_counter()
     if maxrank is None:
         qstate = peps.computational_zeros(tfi.nrows, tfi.ncols, backend=backend)
     else:
         qstate = peps.random(tfi.nrows, tfi.ncols, maxrank, backend=backend)
+    if using_ctf:
+        ctf.initialize_flops_counter()
     for i in range(steps):
         for operator, sites in tfi.trotter_steps():
             qstate.apply_operator(operator, sites, threshold=threshold, maxrank=maxrank, randomized_svd=randomized_svd)
@@ -66,14 +69,17 @@ def run_peps(tfi, steps, normfreq, backend, threshold, maxrank, randomized_svd):
             qstate.site_normalize()
     if using_ctf:
         timer_epoch.end()
-    return qstate
+        flops = ctf.get_estimated_flops()
+    else:
+        flops = None
+    return qstate, flops
 
 
 def main(args):
     tfi = TraversalFieldIsing(args.coupling, args.field, args.nrow, args.ncol, args.tau, args.backend)
 
     t = time.time()
-    peps_qstate = run_peps(tfi, args.steps, args.normfreq, backend=args.backend, threshold=args.threshold, maxrank=args.maxrank, randomized_svd=args.randomized_svd)
+    peps_qstate, flops = run_peps(tfi, args.steps, args.normfreq, backend=args.backend, threshold=args.threshold, maxrank=args.maxrank, randomized_svd=args.randomized_svd)
     peps_ite_time = time.time() - t
 
     backend = tensorbackends.get(args.backend)
@@ -91,10 +97,10 @@ def main(args):
         print('backend.name', args.backend)
         print('backend.nproc', backend.nproc)
 
-        print('peps.threshold', args.threshold)
         print('peps.maxrank', args.maxrank)
 
         print('result.peps_ite_time', peps_ite_time)
+        print('result.peps_ite_flops', flops)
 
 
 def build_cli_parser():
