@@ -1,3 +1,4 @@
+from tensorbackends.interface import ImplicitRandomizedSVD
 
 def apply_single_site_operator(state, operator, position):
     state.grid[position] = state.backend.einsum('ijklxp,xy->ijklyp', state.grid[position], operator)
@@ -51,57 +52,42 @@ def apply_local_pair_operator_randomized_svd(state, operator, positions, thresho
     x_pos, y_pos = positions
     x, y = state.grid[x_pos], state.grid[y_pos]
 
-    # split the operator
-    x_operator, s, y_operator = state.backend.einsumsvd('xyuv->xuA,yvA', operator)
-    x_operator, s, y_operator = truncate(state.backend, x_operator, s, y_operator, 2, 2, threshold=1e-5)
-    s = s ** 0.5
-    x_operator = state.backend.einsum('xuA,A->xuA', x_operator, s)
-    y_operator = state.backend.einsum('yvA,A->yvA', y_operator, s)
-
     if x_pos[0] < y_pos[0]: # [x y]^T
-        apply_on_x = 'abcdxp,xuA->(abdup)(cA)'
-        apply_on_y = 'cfghyp,yvA->(cA)(fghvp)'
-        m_axes = [0, 1, 3, 4, 5]
-        n_axes = [1, 2, 3, 4, 5]
-        extract_x = 'abdupc,c->abcdup'
-        extract_y = 'cfghvp,c->cfghvp'
+        prod_subscripts = 'abcdxp,cfghyq,xyuv->abndup,nfghvq'
+        scale_u_subscripts = 'absdup,s->absdup'
+        scale_v_subscripts = 'sbcdvp,s->sbcdvp'
+        link = (2, 0)
     elif x_pos[0] > y_pos[0]: # [y x]^T
-        apply_on_x = 'abcdxp,xuA->(bcdup)(aA)'
-        apply_on_y = 'efahyp,yvA->(aA)(efhvp)'
-        m_axes = [1, 2, 3, 4, 5]
-        n_axes = [0, 1, 3, 4, 5]
-        extract_x = 'bcdupa,a->abcdup'
-        extract_y = 'aefhvp,a->efahvp'
+        prod_subscripts = 'abcdxp,efahyq,xyuv->nbcdup,efnhvq'
+        link = (0, 2)
+        scale_u_subscripts = 'sbcdup,s->sbcdup'
+        scale_v_subscripts = 'absdvp,s->absdvp'
     elif x_pos[1] < y_pos[1]: # [x y]
-        apply_on_x = 'abcdxp,xuA->(acdup)(bA)'
-        apply_on_y = 'efgbyp,yvA->(bA)(efgvp)'
-        m_axes = [0, 2, 3, 4, 5]
-        n_axes = [0, 1, 2, 4, 5]
-        extract_x = 'acdupb,b->abcdup'
-        extract_y = 'befgvp,b->efgbvp'
+        prod_subscripts = 'abcdxp,efgbyq,xyuv->ancdup,efgnvq'
+        link = (1, 3)
+        scale_u_subscripts = 'ascdup,s->ascdup'
+        scale_v_subscripts = 'abcsvp,s->abcsvp'
     elif x_pos[1] > y_pos[1]: # [y x]
-        apply_on_x = 'abcdxp,xuA->(abcup)(dA)'
-        apply_on_y = 'edghyp,yvA->(dA)(eghvp)'
-        m_axes = [0, 1, 2, 4, 5]
-        n_axes = [0, 2, 3, 4, 5]
-        extract_x = 'abcupd,d->abcdup'
-        extract_y = 'deghvp,d->edghvp'
+        prod_subscripts = 'abcdxp,edghyq,xyuv->abcnup,enghvq'
+        link = (3, 1)
+        scale_u_subscripts = 'abcsup,s->abcsup'
+        scale_v_subscripts = 'ascdvp,s->ascdvp'
     else:
         assert False
+    
+    if state.using_ctf:
+        import ctf
+        timer = ctf.timer('einsumsvd_implicit_rand')
+        timer.start()
+    u, s, v = state.backend.einsumsvd(prod_subscripts, x, y, operator, option=ImplicitRandomizedSVD(rank=maxrank))
+    if state.using_ctf:
+        timer.stop()
 
-    m_shape = [x.shape[d] for d in m_axes]
-    n_shape = [y.shape[d] for d in n_axes]
-
-    x_mat = state.backend.einsum(apply_on_x, x, x_operator)
-    y_mat = state.backend.einsum(apply_on_y, y, y_operator)
-
-    u, s, vh = randomized_svd(state.backend, x_mat, y_mat, maxrank, niter, oversamp)
     s = s ** 0.5
-    x = state.backend.einsum(extract_x, u.reshape(*m_shape, -1), s)
-    y = state.backend.einsum(extract_y, vh.reshape(-1, *n_shape), s)
-
-    state.grid[x_pos] = x
-    state.grid[y_pos] = y
+    u = state.backend.einsum(scale_u_subscripts, u, s)
+    v = state.backend.einsum(scale_v_subscripts, v, s)
+    state.grid[x_pos] = u
+    state.grid[y_pos] = v
 
 
 def randomized_svd(backend, a, b, rank, niter=1, oversamp=5):

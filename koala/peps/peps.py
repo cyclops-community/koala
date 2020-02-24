@@ -19,6 +19,7 @@ class PEPS(QuantumState):
     def __init__(self, grid, backend):
         self.backend = tensorbackends.get(backend)
         self.grid = grid
+        self.using_ctf = self.backend.name in {'ctf', 'ctfview'}
 
     @property
     def nrow(self):
@@ -68,6 +69,10 @@ class PEPS(QuantumState):
             self.apply_gate(gate, threshold=threshold, maxrank=maxrank, randomized_svd=randomized_svd)
 
     def apply_operator(self, operator, sites, threshold=None, maxrank=None, randomized_svd=False):
+        if self.using_ctf:
+            import ctf
+            timer = ctf.timer('apply_operator')
+            timer.start()
         operator = self.backend.astensor(operator)
         positions = [divmod(site, self.ncol) for site in sites]
         if len(positions) == 1:
@@ -76,14 +81,22 @@ class PEPS(QuantumState):
             update.apply_local_pair_operator(self, operator, positions, threshold, maxrank, randomized_svd)
         else:
             raise ValueError('nonlocal operator is not supported')
+        if self.using_ctf:
+            timer.stop()
 
     def site_normalize(self, *sites):
         """Normalize site-wise."""
+        if self.using_ctf:
+            import ctf
+            timer = ctf.timer('site_normalize')
+            timer.start()
         if not sites:
             sites = range(self.nsite)
         for site in sites:
             pos = divmod(site, self.ncol)
             self.grid[pos] /= self.backend.norm(self.grid[pos])
+        if self.using_ctf:
+            timer.stop()
 
     def __add__(self, other):
         if isinstance(other, PEPS) and self.backend == other.backend:
