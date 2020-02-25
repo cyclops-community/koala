@@ -1,3 +1,4 @@
+import tensorbackends
 from tensorbackends.interface import ImplicitRandomizedSVD
 
 def apply_single_site_operator(state, operator, position):
@@ -94,11 +95,13 @@ def apply_local_pair_operator_randomized_svd(state, operator, positions, thresho
     x, y = state.grid[x_pos], state.grid[y_pos]
 
     # split the operator
-    x_operator, s, y_operator = state.backend.einsumsvd('xyuv->xuA,yvA', operator)
-    x_operator, s, y_operator = truncate(state.backend, x_operator, s, y_operator, 2, 2, threshold=1e-5)
+    numpy_backend = tensorbackends.get('numpy')
+    operator = numpy_backend.tensor(operator.numpy())
+    x_operator, s, y_operator = numpy_backend.einsumsvd('xyuv->xuA,yvA', operator)
+    x_operator, s, y_operator = truncate(numpy_backend, x_operator, s, y_operator, 2, 2, threshold=1e-5)
     s = s ** 0.5
-    x_operator = state.backend.einsum('xuA,A->xuA', x_operator, s)
-    y_operator = state.backend.einsum('yvA,A->yvA', y_operator, s)
+    x_operator = state.backend.astensor(numpy_backend.einsum('xuA,A->xuA', x_operator, s))
+    y_operator = state.backend.astensor(numpy_backend.einsum('yvA,A->yvA', y_operator, s))
 
     if x_pos[0] < y_pos[0]: # [x y]^T
         apply_on_x = 'abcdxp,xuA->(abdup)(cA)'
