@@ -116,7 +116,7 @@ class PEPS(QuantumState):
             return NotImplemented
 
     def norm(self):
-        return sqrt(np.real_if_close(self.inner(self)))
+        return sqrt(self.inner(self))
 
     def add(self, other, *, coeff=1.0):
         """
@@ -177,7 +177,7 @@ class PEPS(QuantumState):
         return contraction.contract(self, approach='MPS', **svdargs)
 
     def inner(self, other):
-        return self.dagger().apply(other).contract()
+        return self.dagger().apply(other).contract().real
 
     def statevector(self):
         from .. import statevector
