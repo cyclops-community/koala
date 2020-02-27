@@ -199,7 +199,7 @@ class PEPS(QuantumState):
         """
         grid = np.empty_like(self.grid)
         for (idx, a), b in zip(np.ndenumerate(self.grid), other.grid.flat):
-            grid[idx] = sites.contract_z(a, b)
+            grid[idx] = sites.contract_z(b, a)
         return PEPS(grid, self.backend)
 
     def concatenate(self, other, axis=0):
