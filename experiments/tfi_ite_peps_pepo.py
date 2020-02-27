@@ -32,6 +32,26 @@ def vertical_pair_site_operator(tsr):
     uv = tsr.backend.einsum('suv,s->s()()()uv', uv, s)
     return xy, uv
 
+def pepo_identity(nrow, ncol, backend='numpy'):
+    backend = tensorbackends.get(backend)
+    grid = np.empty((nrow, ncol), dtype=object)
+    for i, j in np.ndindex(nrow, ncol):
+        grid[i, j] = backend.astensor(np.eye(2,dtype=complex).reshape(1,1,1,1,2,2))
+    return peps.PEPS(grid, backend)
+
+def pepo_multiply_operator(pepo, operator, site):
+    pepo.grid[site] = sites.contract_z(pepo.grid[site], operator)
+
+def pepo_switch_backend(pepo, backend):
+    if pepo.backend.name != 'numpy':
+        raise ValueError('can only switch from numpy')
+    backend = tensorbackends.get(backend)
+    for idx in np.ndindex(*pepo.shape):
+        pepo.grid[idx] = backend.astensor(pepo.grid[idx].unwrap())
+    pepo.backend = backend
+    pepo.using_ctf = backend.name in {'ctf', 'ctfview'}
+
+
 class Timer:
     def __init__(self, backend, name):
         backend = tensorbackends.get(backend)
@@ -50,52 +70,26 @@ class Timer:
             self.timer.stop() 
 
 
-def build_tfi_trottered_step_operators(J, h, nrows, ncols, tau, backend):
+def build_tfi_trottered_step_pepo(J, h, nrows, ncols, tau, backend):
     numpy_backend = tensorbackends.get('numpy')
-    backend = tensorbackends.get(backend)
     one_site = one_site_operator(numpy_backend.astensor(sla.expm(PAULI_X*(h*tau))))
     exp_pauli_zz = numpy_backend.astensor(sla.expm(PAULI_ZZ.reshape(4,4)*(J*tau)).reshape(2,2,2,2))
     h_two_site = horizontal_pair_site_operator(exp_pauli_zz)
     v_two_site = vertical_pair_site_operator(exp_pauli_zz)
-    hoperators = {}
-    voperators = {}
-    touched_sites = set()
+    pepo = pepo_identity(nrows, ncols)
+    # vertical one site operators
+    for i, j in np.ndindex(nrows, ncols):
+        pepo_multiply_operator(pepo, one_site, (i,j))
     # horizontal two site operators
     for i, j in np.ndindex(nrows, ncols-1):
-        a, b = (i,j), (i,j+1)
-        op_a, op_b = h_two_site[0], h_two_site[1]
-        if a not in touched_sites:
-            op_a = sites.contract_z(one_site, op_a)
-            touched_sites.add(a)
-        if b not in touched_sites:
-            op_b = sites.contract_z(one_site, op_b)
-            touched_sites.add(b)
-        hoperators[a, b] = op_a, op_b
+        pepo_multiply_operator(pepo, h_two_site[0], (i,j))
+        pepo_multiply_operator(pepo, h_two_site[1], (i,j+1))
     # vertical two site operators
     for i, j in np.ndindex(nrows-1, ncols):
-        voperators[(i,j), (i+1,j)] = v_two_site[0], v_two_site[1]
-    return {
-        idx: (backend.astensor(a.unwrap()), backend.astensor(b.unwrap()))
-        for idx, (a,b) in hoperators.items()
-    }, {
-        idx: (backend.astensor(a.unwrap()), backend.astensor(b.unwrap()))
-        for idx, (a,b) in voperators.items()
-    }
-
-
-def apply_trottered_step_operators(qstate, hoperators, voperators, maxrank):
-    for (a, b), (op_a, op_b) in hoperators.items():
-        with Timer(qstate.backend, 'apply_trottered_step_operators_contraction'):
-            qstate.grid[a] = sites.contract_z(qstate[a], op_a)
-            qstate.grid[b] = sites.contract_z(qstate[b], op_b)
-        with Timer(qstate.backend, 'reduce_bond_dimensions'):
-            qstate.grid[a], qstate.grid[b] = sites.reduce_y(qstate[a], qstate[b], option=ImplicitRandomizedSVD(maxrank))
-    for (a, b), (op_a, op_b) in voperators.items():
-        with Timer(qstate.backend, 'apply_trottered_step_operators_contraction'):
-            qstate.grid[a] = sites.contract_z(qstate[a], op_a)
-            qstate.grid[b] = sites.contract_z(qstate[b], op_b)
-        with Timer(qstate.backend, 'reduce_bond_dimensions'):
-            qstate.grid[a], qstate.grid[b] = sites.reduce_x(qstate[a], qstate[b], option=ImplicitRandomizedSVD(maxrank))
+        pepo_multiply_operator(pepo, v_two_site[0], (i,j))
+        pepo_multiply_operator(pepo, v_two_site[1], (i+1,j))
+    pepo_switch_backend(pepo, backend)
+    return pepo
 
 
 def horizontal_links(nrows, ncols):
@@ -109,20 +103,28 @@ def vertical_links(nrows, ncols):
         yield (i, j), (i+1, j)
 
 
+def reduce_bond_dimensions(qstate, maxrank):
+    for a, b in horizontal_links(qstate.nrow, qstate.ncol):
+        qstate.grid[a], qstate.grid[b] = sites.reduce_y(qstate[a], qstate[b], option=ImplicitRandomizedSVD(maxrank))
+    for a, b in vertical_links(qstate.nrow, qstate.ncol):
+        qstate.grid[a], qstate.grid[b] = sites.reduce_x(qstate[a], qstate[b], option=ImplicitRandomizedSVD(maxrank))
 
-def run_peps(operators, nrow, ncol, steps, normfreq, backend, threshold, maxrank, randomized_svd):
+
+def run_peps(pepo, steps, normfreq, backend, threshold, maxrank, randomized_svd):
     using_ctf = backend in {'ctf', 'ctfview'}
     if using_ctf:
         import ctf
         timer_epoch = ctf.timer_epoch('run_peps')
         timer_epoch.begin()
         ctf.initialize_flops_counter()
-    qstate = peps.random(nrow, ncol, maxrank, backend=backend)
+    qstate = peps.random(pepo.nrow, pepo.ncol, maxrank, backend=backend)
     if using_ctf:
         ctf.initialize_flops_counter()
     for i in range(steps):
-        with Timer(qstate.backend, 'apply_trottered_step_operators'):
-            apply_trottered_step_operators(qstate, *operators, maxrank)
+        with Timer(qstate.backend, 'apply_pepo'):
+            qstate = pepo.apply(qstate)
+        with Timer(qstate.backend, 'reduce_bond_dimensions'):
+            reduce_bond_dimensions(qstate, maxrank)
         if (i+1) % normfreq == 0:
             qstate.site_normalize()
     if using_ctf:
@@ -134,11 +136,11 @@ def run_peps(operators, nrow, ncol, steps, normfreq, backend, threshold, maxrank
 
 
 def main(args):
-    with Timer(args.backend, 'build_operators'):
-        operators = build_tfi_trottered_step_operators(args.coupling, args.field, args.nrow, args.ncol, args.tau, args.backend)
+    with Timer(args.backend, 'build_pepo'):
+        pepo = build_tfi_trottered_step_pepo(args.coupling, args.field, args.nrow, args.ncol, args.tau, args.backend)
 
     t = time.time()
-    peps_qstate, flops = run_peps(operators, args.nrow, args.ncol, args.steps, args.normfreq, backend=args.backend, threshold=args.threshold, maxrank=args.maxrank, randomized_svd=args.randomized_svd)
+    peps_qstate, flops = run_peps(pepo, args.steps, args.normfreq, backend=args.backend, threshold=args.threshold, maxrank=args.maxrank, randomized_svd=args.randomized_svd)
     peps_ite_time = time.time() - t
 
     backend = tensorbackends.get(args.backend)
