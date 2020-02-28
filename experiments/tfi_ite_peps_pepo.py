@@ -20,14 +20,14 @@ def one_site_operator(tsr):
 
 def horizontal_pair_site_operator(tsr):
     xy, s, uv = tsr.backend.einsvd('xyuv->xys,uvs', tsr)
-    s = s ** 2
+    s = s ** 0.5
     xy = tsr.backend.einsum('xys,s->()s()()xy', xy, s)
     uv = tsr.backend.einsum('uvs,s->()()()suv', uv, s)
     return xy, uv
 
 def vertical_pair_site_operator(tsr):
     xy, s, uv = tsr.backend.einsvd('xyuv->sxy,suv', tsr)
-    s = s ** 2
+    s = s ** 0.5
     xy = tsr.backend.einsum('sxy,s->()()s()xy', xy, s)
     uv = tsr.backend.einsum('suv,s->s()()()uv', uv, s)
     return xy, uv

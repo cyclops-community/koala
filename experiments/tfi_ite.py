@@ -61,7 +61,8 @@ def run_statevector(tfi, steps, normfreq, backend):
 
 
 def run_peps(tfi, steps, normfreq, backend, threshold, maxrank, randomized_svd):
-    qstate = peps.computational_zeros(tfi.nrows, tfi.ncols, backend=backend)
+    # qstate = peps.computational_zeros(tfi.nrows, tfi.ncols, backend=backend)
+    qstate = peps.random(tfi.nrows, tfi.ncols, maxrank, backend=backend)
     for i in range(steps):
         for operator, sites in tfi.trotter_steps():
             qstate.apply_operator(operator, sites, threshold=threshold, maxrank=maxrank, randomized_svd=randomized_svd)
