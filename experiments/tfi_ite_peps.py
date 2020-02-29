@@ -4,7 +4,7 @@ import argparse, time
 from koala import statevector, peps, Observable
 
 import tensorbackends
-from tensorbackends.interface import ReducedSVD
+from tensorbackends.interface import ReducedSVD, RandomizedSVD, ImplicitRandomizedSVD
 import numpy as np
 import scipy.linalg as sla
 
@@ -50,17 +50,6 @@ class TraversalFieldIsing:
             yield self.trottered_double_gate, pos
 
 
-def run_statevector(tfi, steps, normfreq, backend):
-    qstate = statevector.computational_zeros(tfi.nrows*tfi.ncols, backend=backend)
-    for i in range(steps):
-        for operator, sites in tfi.trotter_steps():
-            qstate.apply_operator(operator, sites)
-        if i % normfreq == 0:
-            qstate /= qstate.norm()
-    qstate /= qstate.norm()
-    return qstate
-
-
 def run_peps(tfi, steps, normfreq, backend, threshold, maxrank, randomized_svd):
     qstate = peps.computational_zeros(tfi.nrows, tfi.ncols, backend=backend)
     for i in range(steps):
@@ -76,14 +65,6 @@ def main(args):
     tfi = TraversalFieldIsing(args.coupling, args.field, args.nrow, args.ncol, args.tau, args.backend)
 
     t = time.process_time()
-    statevector_qstate = run_statevector(tfi, args.steps, args.normfreq, backend=args.backend)
-    statevector_ite_time = time.process_time() - t
-
-    t = time.process_time()
-    statevector_energy = statevector_qstate.expectation(tfi.observable)
-    statevector_expectiation_time = time.process_time() - t
-
-    t = time.process_time()
     peps_qstate = run_peps(tfi, args.steps, args.normfreq, backend=args.backend, threshold=args.threshold, maxrank=args.maxrank, randomized_svd=args.randomized_svd)
     peps_ite_time = time.process_time() - t
 
@@ -92,8 +73,16 @@ def main(args):
     peps_expectation_time = time.process_time() - t
 
     t = time.process_time()
-    peps_energy_approx = peps_qstate.expectation(tfi.observable, use_cache=True, contract_option=peps.BMPS(ReducedSVD(rank=args.maxrank**2)))
-    peps_approx_expectation_time = time.process_time() - t
+    peps_energy_svd_approx = peps_qstate.expectation(tfi.observable, use_cache=True, contract_option=peps.BMPS(ReducedSVD(rank=args.maxrank**2)))
+    peps_svd_approx_expectation_time = time.process_time() - t
+
+    t = time.process_time()
+    peps_energy_rsvd_approx = peps_qstate.expectation(tfi.observable, use_cache=True, contract_option=peps.BMPS(RandomizedSVD(rank=args.maxrank**2)))
+    peps_rsvd_approx_expectation_time = time.process_time() - t
+
+    t = time.process_time()
+    peps_energy_irsvd_approx = peps_qstate.expectation(tfi.observable, use_cache=True, contract_option=peps.BMPS(ImplicitRandomizedSVD(rank=args.maxrank**2)))
+    peps_irsvd_approx_expectation_time = time.process_time() - t
 
     backend = tensorbackends.get(args.backend)
 
@@ -113,16 +102,17 @@ def main(args):
         print('peps.threshold', args.threshold)
         print('peps.maxrank', args.maxrank)
 
-        print('result.statevector_energy', statevector_energy)
         print('result.peps_energy', peps_energy)
-        print('result.peps_energy_approx', peps_energy_approx)
+        print('result.peps_energy_svd_approx', peps_energy_svd_approx)
+        print('result.peps_energy_rsvd_approx', peps_energy_rsvd_approx)
+        print('result.peps_energy_irsvd_approx', peps_energy_irsvd_approx)
 
-        print('result.statevector_ite_time', statevector_ite_time)
         print('result.peps_ite_time', peps_ite_time)
 
-        print('result.statevector_expectiation_time', statevector_expectiation_time)
         print('result.peps_expectation_time', peps_expectation_time)
-        print('result.peps_approx_expectation_time', peps_approx_expectation_time)
+        print('result.peps_svd_approx_expectation_time', peps_svd_approx_expectation_time)
+        print('result.peps_rsvd_approx_expectation_time', peps_rsvd_approx_expectation_time)
+        print('result.peps_irsvd_approx_expectation_time', peps_irsvd_approx_expectation_time)
 
 
 def build_cli_parser():
