@@ -135,7 +135,7 @@ class PEPS(QuantumState):
             grid[i, j] = tn_add(self.backend, self[i, j], other[i, j], internal_bonds, external_bonds, 1, coeff)
         return PEPS(grid, self.backend)
 
-    def amplitude(self, indices):
+    def amplitude(self, indices, contract_option=None):
         if len(indices) != self.nsite:
             raise ValueError('indices number and sites number do not match')
         indices = np.array(indices).reshape(*self.shape)
@@ -144,23 +144,27 @@ class PEPS(QuantumState):
         one = self.backend.astensor(np.array([0,1], dtype=complex).reshape(2, 1))
         for idx, tensor in np.ndenumerate(self.grid):
             grid[idx] = self.backend.einsum('ijklxp,xq->ijklpq', tensor, one if indices[idx] else zero)
-        return PEPS(grid, self.backend).contract()
+        return PEPS(grid, self.backend).contract(contract_option)
 
-    def probability(self, indices):
-        return np.abs(self.amplitude(indices))**2
+    def probability(self, indices, contract_option=None):
+        return np.abs(self.amplitude(indices, contract_option))**2
 
-    def expectation(self, observable, use_cache=False):
+    def expectation(self, observable, use_cache=False, contract_option=None):
         if use_cache:
-            return self._expectation_with_cache(observable)
+            if contract_option is None:
+                contract_option = contraction.BMPS(svd_option=None)
+            if not isinstance(contract_option, contraction.BMPS):
+                raise ValueError('expectation with cache must use BMPS contraction')
+            return self._expectation_with_cache(observable, contract_option)
         e = 0
         for tensor, sites in observable:
             other = self.copy()
             other.apply_operator(self.backend.astensor(tensor), sites)
-            e += np.real_if_close(self.inner(other))
+            e += np.real_if_close(self.inner(other, contract_option))
         return e
 
-    def _expectation_with_cache(self, observable):
-        env = contraction.create_env_cache(self)
+    def _expectation_with_cache(self, observable, bmps_option):
+        env = contraction.create_env_cache(self, bmps_option)
         e = 0
         for tensor, sites in observable:
             other = self.copy()
@@ -169,19 +173,19 @@ class PEPS(QuantumState):
             up, down = min(rows), max(rows)
             e += np.real_if_close(contraction.inner_with_env(
                 other[up:down+1].dagger().apply(self[up:down+1]),
-                env, up, down
+                env, up, down, bmps_option
             ))
         return e
 
-    def contract(self, approach='MPS', **svdargs):
-        return contraction.contract(self, approach='MPS', **svdargs)
+    def contract(self, option=None):
+        return contraction.contract(self, option)
 
-    def inner(self, other):
-        return self.dagger().apply(other).contract().real
+    def inner(self, other, contract_option=None):
+        return self.dagger().apply(other).contract(contract_option).real
 
-    def statevector(self):
+    def statevector(self, contract_option=None):
         from .. import statevector
-        return statevector.StateVector(self.contract(), self.backend)
+        return statevector.StateVector(self.contract(contract_option), self.backend)
 
     def apply(self, other):
         """
