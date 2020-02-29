@@ -26,7 +26,7 @@ def contract_y(a, b):
     return a.backend.einsum('aicdpq,AbCiPQ->(aA)b(cC)d(pP)(qQ)', a, b)
 
 def contract_z(a, b):
-    return a.backend.einsum('abcdpi,ABCDiq->(aA)(bB)(cC)(dD)pq', a, b)
+    return a.backend.einsum('abcdiq,ABCDpi->(aA)(bB)(cC)(dD)pq', a, b)
 
 
 def reduce_x(a, b, option):

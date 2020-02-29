@@ -2,34 +2,20 @@
 This module implements contraction algorithms.
 """
 
+from collections import namedtuple
 import numpy as np
+from tensorbackends.interface import ReducedSVD
 
 from . import sites
 
 
-def create_env_cache(state):
-    peps_obj = state.dagger().apply(state)
-    _up, _down = {}, {}
-    for i in range(peps_obj.shape[0]):
-        _up[i] = contract_to_MPS(peps_obj[:i]) if i != 0 else None
-        _down[i] = contract_to_MPS(peps_obj[i+1:]) if i != state.nrow - 1 else None
-    return _up, _down
+Snake = namedtuple('Snake', [])
+BMPS = namedtuple('BMPS', ['svd_option'])
+Square = namedtuple('Square', ['svd_option'])
+TRG = namedtuple('TRG', ['svd_option'])
 
 
-def inner_with_env(state, env, up_idx, down_idx):
-    up, down = env[0][up_idx], env[1][down_idx]
-    if up is None and down is None:
-        peps_obj = state
-    elif up is None:
-        peps_obj = state.concatenate(down)
-    elif down is None:
-        peps_obj = up.concatenate(state)
-    else:
-        peps_obj = up.concatenate(state).concatenate(down)
-    return peps_obj.contract()
-
-
-def contract(state, approach='MPS', svd_option=None):
+def contract(state, option):
     """
     Contract the PEPS to a single tensor or a scalar(a "0-tensor").
 
@@ -46,15 +32,18 @@ def contract(state, approach='MPS', svd_option=None):
     output: state.backend.tensor or scalar
         The contraction result.
     """
-    approach = approach.lower()
-    if approach in ['mps', 'bmps', 'bondary']:
-        return contract_BMPS(state, svd_option)
-    elif approach in ['meshgrid', 'square', 'squares']:
-        return contract_squares(state, svd_option)
-    elif approach in ['trg', 'terg']:
-        return contract_TRG(state, svd_option)
-    elif approach in ['s', 'snake', 'snakes']:
+    if option is None:
+        option = BMPS(None)
+    if isinstance(option, Snake):
         return contract_snake(state)
+    elif isinstance(option, BMPS):
+        return contract_BMPS(state, svd_option=option.svd_option)
+    elif isinstance(option, Square):
+        return contract_squares(state, svd_option=option.svd_option)
+    elif isinstance(option, TRG):
+        return contract_TRG(state, svd_option=option.svd_option)
+    else:
+        raise ValueError(f'unkonwn contraction option: {option}')
 
 
 def contract_BMPS(state, mps_mult_mpo=None, svd_option=None):
@@ -113,9 +102,9 @@ def contract_env(state, row_range, col_range, svd_option=None):
         col_range = (col_range, col_range+1)
     mid_peps = state[row_range[0]:row_range[1]].copy()
     if row_range[0] > 0:
-        mid_peps = state[:row_range[0]].contract_to_MPS(svd_option).concatenate(mid_peps)
+        mid_peps = state[:row_range[0]].contract_to_MPS(svd_option=svd_option).concatenate(mid_peps)
     if row_range[1] < state.nrow:
-        mid_peps = mid_peps.concatenate(state[row_range[1]:].contract_to_MPS(svd_option))
+        mid_peps = mid_peps.concatenate(state[row_range[1]:].contract_to_MPS(svd_option=svd_option))
     env_peps = mid_peps[:,col_range[0]:col_range[1]]
     if col_range[0] > 0:
         env_peps = mid_peps[:,:col_range[0]].contract_to_MPS(horizontal=True, svd_option=svd_option).concatenate(env_peps, axis=1)
@@ -313,6 +302,28 @@ def _mps_mult_mpo(mps, mpo, svd_option=None):
     new_mps = np.empty_like(mps)
     for i, (s, o) in enumerate(zip(mps, mpo)):
         new_mps[i] = sites.contract_x(s, o)
-        if svd_option is not None:
+        if svd_option is not None and i > 0:
             new_mps[i-1], new_mps[i] = sites.reduce_y(new_mps[i-1], new_mps[i], svd_option)
     return new_mps
+
+
+def create_env_cache(state, bmps_option):
+    peps_obj = state.dagger().apply(state)
+    _up, _down = {}, {}
+    for i in range(peps_obj.shape[0]):
+        _up[i] = contract_to_MPS(peps_obj[:i], svd_option=bmps_option.svd_option) if i != 0 else None
+        _down[i] = contract_to_MPS(peps_obj[i+1:], svd_option=bmps_option.svd_option) if i != state.nrow - 1 else None
+    return _up, _down
+
+
+def inner_with_env(state, env, up_idx, down_idx, bmps_option):
+    up, down = env[0][up_idx], env[1][down_idx]
+    if up is None and down is None:
+        peps_obj = state
+    elif up is None:
+        peps_obj = state.concatenate(down)
+    elif down is None:
+        peps_obj = up.concatenate(state)
+    else:
+        peps_obj = up.concatenate(state).concatenate(down)
+    return peps_obj.contract(bmps_option)
