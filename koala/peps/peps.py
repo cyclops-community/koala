@@ -150,32 +150,7 @@ class PEPS(QuantumState):
         return np.abs(self.amplitude(indices, contract_option))**2
 
     def expectation(self, observable, use_cache=False, contract_option=None):
-        if use_cache:
-            if contract_option is None:
-                contract_option = contraction.BMPS(svd_option=None)
-            if not isinstance(contract_option, contraction.BMPS):
-                raise ValueError('expectation with cache must use BMPS contraction')
-            return self._expectation_with_cache(observable, contract_option)
-        e = 0
-        for tensor, sites in observable:
-            other = self.copy()
-            other.apply_operator(self.backend.astensor(tensor), sites)
-            e += np.real_if_close(self.inner(other, contract_option))
-        return e
-
-    def _expectation_with_cache(self, observable, bmps_option):
-        env = contraction.create_env_cache(self, bmps_option)
-        e = 0
-        for tensor, sites in observable:
-            other = self.copy()
-            other.apply_operator(self.backend.astensor(tensor), sites)
-            rows = [site // self.ncol for site in sites]
-            up, down = min(rows), max(rows)
-            e += np.real_if_close(contraction.inner_with_env(
-                other[up:down+1].dagger().apply(self[up:down+1]),
-                env, up, down, bmps_option
-            ))
-        return e
+        return braket(self, observable, self, use_cache=use_cache, contract_option=contract_option)
 
     def contract(self, option=None):
         return contraction.contract(self, option)
@@ -278,6 +253,42 @@ class PEPS(QuantumState):
         for idx, tsr in np.ndenumerate(tn):
             tn[idx] = sites.rotate_z(tsr, num_rotate90)
         return PEPS(tn, self.backend)
+
+
+def braket(p, observable, q, use_cache=False, contract_option=None):
+    if p.backend != q.backend:
+        raise ValueError('two states must use the same backend')
+    if p.nsite != q.nsite:
+        raise ValueError('number of sites must be equal in both states')
+    if use_cache:
+        if contract_option is None:
+            contract_option = contraction.BMPS(svd_option=None)
+        if not isinstance(contract_option, contraction.BMPS):
+            raise ValueError('braket with cache must use BMPS contraction')
+        return _braket_with_cache(p, observable, q, contract_option)
+    e = 0
+    p_dagger = p.dagger()
+    for tensor, sites in observable:
+        other = q.copy()
+        other.apply_operator(q.backend.astensor(tensor), sites)
+        e += p_dagger.apply(other).contract(contract_option)
+    return e
+
+
+def _braket_with_cache(p, observable, q, bmps_option):
+    env = contraction.create_env_cache(p, q, bmps_option)
+    p_dagger = p.dagger()
+    e = 0
+    for tensor, sites in observable:
+        other = q.copy()
+        other.apply_operator(q.backend.astensor(tensor), sites)
+        rows = [site // q.ncol for site in sites]
+        up, down = min(rows), max(rows)
+        e += contraction.inner_with_env(
+            p_dagger[up:down+1].apply(other[up:down+1]),
+            env, up, down, bmps_option
+        )
+    return e
 
 
 def tn_add(backend, a, b, internal_bonds, external_bonds, coeff_a, coeff_b):

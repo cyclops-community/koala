@@ -307,12 +307,13 @@ def _mps_mult_mpo(mps, mpo, svd_option=None):
     return new_mps
 
 
-def create_env_cache(state, bmps_option):
-    peps_obj = state.dagger().apply(state)
+def create_env_cache(state1, state2, bmps_option):
+    assert state1.shape == state2.shape
+    peps_obj = state1.dagger().apply(state2)
     _up, _down = {}, {}
     for i in range(peps_obj.shape[0]):
         _up[i] = contract_to_MPS(peps_obj[:i], svd_option=bmps_option.svd_option) if i != 0 else None
-        _down[i] = contract_to_MPS(peps_obj[i+1:], svd_option=bmps_option.svd_option) if i != state.nrow - 1 else None
+        _down[i] = contract_to_MPS(peps_obj[i+1:], svd_option=bmps_option.svd_option) if i != state1.nrow - 1 else None
     return _up, _down
 
 
