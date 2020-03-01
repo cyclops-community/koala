@@ -77,6 +77,14 @@ class PEPS(QuantumState):
         else:
             raise ValueError('nonlocal operator is not supported')
 
+    def site_normalize(self, *sites):
+        """Normalize site-wise."""
+        if not sites:
+            sites = range(self.nsite)
+        for site in sites:
+            pos = divmod(site, self.ncol)
+            self.grid[pos] /= self.backend.norm(self.grid[pos])
+
     def __add__(self, other):
         if isinstance(other, PEPS) and self.backend == other.backend:
             return self.add(other)
@@ -108,7 +116,7 @@ class PEPS(QuantumState):
             return NotImplemented
 
     def norm(self):
-        return sqrt(np.real_if_close(self.inner(self)))
+        return sqrt(self.inner(self))
 
     def add(self, other, *, coeff=1.0):
         """
@@ -127,7 +135,7 @@ class PEPS(QuantumState):
             grid[i, j] = tn_add(self.backend, self[i, j], other[i, j], internal_bonds, external_bonds, 1, coeff)
         return PEPS(grid, self.backend)
 
-    def amplitude(self, indices):
+    def amplitude(self, indices, contract_option=None):
         if len(indices) != self.nsite:
             raise ValueError('indices number and sites number do not match')
         indices = np.array(indices).reshape(*self.shape)
@@ -136,44 +144,23 @@ class PEPS(QuantumState):
         one = self.backend.astensor(np.array([0,1], dtype=complex).reshape(2, 1))
         for idx, tensor in np.ndenumerate(self.grid):
             grid[idx] = self.backend.einsum('ijklxp,xq->ijklpq', tensor, one if indices[idx] else zero)
-        return PEPS(grid, self.backend).contract()
+        return PEPS(grid, self.backend).contract(contract_option)
 
-    def probability(self, indices):
-        return np.abs(self.amplitude(indices))**2
+    def probability(self, indices, contract_option=None):
+        return np.abs(self.amplitude(indices, contract_option))**2
 
-    def expectation(self, observable, use_cache=False):
-        if use_cache:
-            return self._expectation_with_cache(observable)
-        e = 0
-        for tensor, sites in observable:
-            other = self.copy()
-            other.apply_operator(self.backend.astensor(tensor), sites)
-            e += np.real_if_close(self.inner(other))
-        return e
+    def expectation(self, observable, use_cache=False, contract_option=None):
+        return braket(self, observable, self, use_cache=use_cache, contract_option=contract_option)
 
-    def _expectation_with_cache(self, observable):
-        env = contraction.create_env_cache(self)
-        e = 0
-        for tensor, sites in observable:
-            other = self.copy()
-            other.apply_operator(self.backend.astensor(tensor), sites)
-            rows = [site // self.ncol for site in sites]
-            up, down = min(rows), max(rows)
-            e += np.real_if_close(contraction.inner_with_env(
-                other[up:down+1].dagger().apply(self[up:down+1]),
-                env, up, down
-            ))
-        return e
+    def contract(self, option=None):
+        return contraction.contract(self, option)
 
-    def contract(self, approach='MPS', **svdargs):
-        return contraction.contract(self, approach=approach, **svdargs)
+    def inner(self, other, contract_option=None):
+        return self.dagger().apply(other).contract(contract_option).real
 
-    def inner(self, other):
-        return self.dagger().apply(other).contract()
-
-    def statevector(self):
+    def statevector(self, contract_option=None):
         from .. import statevector
-        return statevector.StateVector(self.contract(), self.backend)
+        return statevector.StateVector(self.contract(contract_option), self.backend)
 
     def apply(self, other):
         """
@@ -191,13 +178,13 @@ class PEPS(QuantumState):
         """
         grid = np.empty_like(self.grid)
         for (idx, a), b in zip(np.ndenumerate(self.grid), other.grid.flat):
-            grid[idx] = sites.contract_z(a, b)
+            grid[idx] = sites.contract_z(b, a)
         return PEPS(grid, self.backend)
 
     def concatenate(self, other, axis=0):
         """
         Concatenate two PEPS along the given axis.
-        
+
         Parameters
         ----------
         other: PEPS
@@ -264,6 +251,42 @@ class PEPS(QuantumState):
         for idx, tsr in np.ndenumerate(tn):
             tn[idx] = sites.rotate_z(tsr, num_rotate90)
         return PEPS(tn, self.backend)
+
+
+def braket(p, observable, q, use_cache=False, contract_option=None):
+    if p.backend != q.backend:
+        raise ValueError('two states must use the same backend')
+    if p.nsite != q.nsite:
+        raise ValueError('number of sites must be equal in both states')
+    if use_cache:
+        if contract_option is None:
+            contract_option = contraction.BMPS(svd_option=None)
+        if not isinstance(contract_option, contraction.BMPS):
+            raise ValueError('braket with cache must use BMPS contraction')
+        return _braket_with_cache(p, observable, q, contract_option)
+    e = 0
+    p_dagger = p.dagger()
+    for tensor, sites in observable:
+        other = q.copy()
+        other.apply_operator(q.backend.astensor(tensor), sites)
+        e += p_dagger.apply(other).contract(contract_option)
+    return e
+
+
+def _braket_with_cache(p, observable, q, bmps_option):
+    env = contraction.create_env_cache(p, q, bmps_option)
+    p_dagger = p.dagger()
+    e = 0
+    for tensor, sites in observable:
+        other = q.copy()
+        other.apply_operator(q.backend.astensor(tensor), sites)
+        rows = [site // q.ncol for site in sites]
+        up, down = min(rows), max(rows)
+        e += contraction.inner_with_env(
+            p_dagger[up:down+1].apply(other[up:down+1]),
+            env, up, down, bmps_option
+        )
+    return e
 
 
 def tn_add(backend, a, b, internal_bonds, external_bonds, coeff_a, coeff_b):

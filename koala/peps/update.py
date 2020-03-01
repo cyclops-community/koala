@@ -1,4 +1,3 @@
-from string import ascii_letters as chars
 
 def apply_single_site_operator(state, operator, position):
     state.grid[position] = state.backend.einsum('ijklxp,xy->ijklyp', state.grid[position], operator)
@@ -60,33 +59,33 @@ def apply_local_pair_operator_randomized_svd(state, operator, positions, thresho
     y_operator = state.backend.einsum('yvA,A->yvA', y_operator, s)
 
     if x_pos[0] < y_pos[0]: # [x y]^T
-        apply_on_x = 'abcdx,xuA->(abdu)(cA)'
-        apply_on_y = 'cfghy,yvA->(cA)(fghv)'
-        m_axes = [0, 1, 3, 4]
-        n_axes = [1, 2, 3, 4]
-        extract_x = 'abduc,c->abcdu'
-        extract_y = 'cfghv,c->cfghv'
+        apply_on_x = 'abcdxp,xuA->(abdup)(cA)'
+        apply_on_y = 'cfghyp,yvA->(cA)(fghvp)'
+        m_axes = [0, 1, 3, 4, 5]
+        n_axes = [1, 2, 3, 4, 5]
+        extract_x = 'abdupc,c->abcdup'
+        extract_y = 'cfghvp,c->cfghvp'
     elif x_pos[0] > y_pos[0]: # [y x]^T
-        apply_on_x = 'abcdx,xuA->(bcdu)(aA)'
-        apply_on_y = 'efahy,yvA->(aA)(efhv)'
-        m_axes = [1, 2, 3, 4]
-        n_axes = [0, 1, 3, 4]
-        extract_x = 'bcdua,a->abcdu'
-        extract_y = 'aefhv,a->efahv'
+        apply_on_x = 'abcdxp,xuA->(bcdup)(aA)'
+        apply_on_y = 'efahyp,yvA->(aA)(efhvp)'
+        m_axes = [1, 2, 3, 4, 5]
+        n_axes = [0, 1, 3, 4, 5]
+        extract_x = 'bcdupa,a->abcdup'
+        extract_y = 'aefhvp,a->efahvp'
     elif x_pos[1] < y_pos[1]: # [x y]
-        apply_on_x = 'abcdx,xuA->(acdu)(bA)'
-        apply_on_y = 'efgby,yvA->(bA)(efgv)'
-        m_axes = [0, 2, 3, 4]
-        n_axes = [0, 1, 2, 4]
-        extract_x = 'acdub,b->abcdu'
-        extract_y = 'befgv,b->efgbv'
+        apply_on_x = 'abcdxp,xuA->(acdup)(bA)'
+        apply_on_y = 'efgbyp,yvA->(bA)(efgvp)'
+        m_axes = [0, 2, 3, 4, 5]
+        n_axes = [0, 1, 2, 4, 5]
+        extract_x = 'acdupb,b->abcdup'
+        extract_y = 'befgvp,b->efgbvp'
     elif x_pos[1] > y_pos[1]: # [y x]
-        apply_on_x = 'abcdx,xuA->(abcu)(dA)'
-        apply_on_y = 'edghy,yvA->(dA)(eghv)'
-        m_axes = [0, 1, 2, 4]
-        n_axes = [0, 2, 3, 4]
-        extract_x = 'abcud,d->abcdu'
-        extract_y = 'deghv,d->edghv'
+        apply_on_x = 'abcdxp,xuA->(abcup)(dA)'
+        apply_on_y = 'edghyp,yvA->(dA)(eghvp)'
+        m_axes = [0, 1, 2, 4, 5]
+        n_axes = [0, 2, 3, 4, 5]
+        extract_x = 'abcupd,d->abcdup'
+        extract_y = 'deghvp,d->edghvp'
     else:
         assert False
 

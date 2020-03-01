@@ -50,14 +50,7 @@ class StateVector(QuantumState):
         return np.abs(self.amplitude(indices))**2
 
     def expectation(self, observable):
-        e = 0
-        all_terms = ''.join(chars[i] for i in range(self.nsite))
-        einstr = f'{all_terms},{all_terms}->'
-        for operator, sites in observable:
-            tensor = self.tensor.copy()
-            tensor = apply_operator(self.backend, tensor, operator, sites)
-            e += np.real_if_close(self.backend.einsum(einstr, tensor, self.tensor.conj()))
-        return e
+        return braket(self, observable, self)
 
     def probabilities(self):
         prob_vector = np.real(self.tensor)**2 + np.imag(self.tensor)**2
@@ -82,6 +75,21 @@ def apply_operator(backend, state_tensor, operator, axes):
     output_terms = ''.join(chars[i] for i in output_state_indices)
     einstr = f'{input_terms},{operator_terms}->{output_terms}'
     return backend.einsum(einstr, state_tensor, operator)
+
+
+def braket(p, observable, q):
+    if p.backend != q.backend:
+        raise ValueError('two states must use the same backend')
+    if p.nsite != q.nsite:
+        raise ValueError('number of sites must be equal in both states')
+    all_terms = ''.join(chars[i] for i in range(q.nsite))
+    einstr = f'{all_terms},{all_terms}->'
+    p_tensor_conj = p.tensor.conj()
+    e = 0
+    for operator, sites in observable:
+        r = apply_operator(q.backend, q.tensor, operator, sites)
+        e += p.backend.einsum(einstr, p_tensor_conj, r)
+    return e
 
 
 def inherit_unary_operators(*operator_names):
