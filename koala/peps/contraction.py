@@ -43,7 +43,7 @@ def contract(state, option):
     elif isinstance(option, TRG):
         return contract_TRG(state, svd_option=option.svd_option)
     else:
-        raise ValueError(f'unkonwn contraction option: {option}')
+        raise ValueError(f'unknown contraction option: {option}')
 
 
 def contract_BMPS(state, mps_mult_mpo=None, svd_option=None):
@@ -130,8 +130,8 @@ def contract_snake(state):
     for i, mps in enumerate(state.grid):
         for tsr in mps[int(i==0):]:
             head = state.backend.einsum('agbcdef->a(gb)cdef',
-            head.reshape((head.shape[0] // tsr.shape[0], tsr.shape[0]) + head.shape[1:]))
-            tsr = state.backend.einsum('agbcdef->abc(gd)ef', tsr.reshape((1,) + tsr.shape))
+            head.reshape(*((head.shape[0] // tsr.shape[0], tsr.shape[0]) + head.shape[1:])))
+            tsr = state.backend.einsum('agbcdef->abc(gd)ef', tsr.reshape(*((1,) + tsr.shape)))
             head = sites.contract_y(head, tsr)
         head = head.transpose(2, 1, 0, 3, 4, 5)
     return head.item() if head.size == 1 else head.reshape(*[int(head.size ** (1 / state.grid.size))] * state.grid.size)
@@ -167,7 +167,7 @@ def contract_squares(state, svd_option=None):
     if new_tn.shape == (1, 1):
         return new_tn[0,0].item() if new_tn[0,0].size == 1 else new_tn[0,0]
     # alternate the neighboring relationship and contract recursively
-    return PEPS(new_tn, state.backend).rotate().contract_squares(svd_option)
+    return contract_squares(PEPS(new_tn, state.backend).rotate(), svd_option)
 
 
 def contract_to_MPS(state, horizontal=False, mps_mult_mpo=None, svd_option=None):

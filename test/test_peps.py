@@ -18,7 +18,8 @@ class TestPEPS(unittest.TestCase):
             Gate('CX', [], [1,4]),
             Gate('S', [], [1]),
         ])
-        self.assertTrue(np.isclose(qstate.norm(), 1))
+        qstate.dagger().apply(qstate).contract(peps.BMPS(None))
+        self.assertTrue(np.isclose(qstate.rotate().norm(), 1))
         qstate *= 2
         self.assertTrue(np.isclose(qstate.norm(), 2))
         qstate /= 2j
