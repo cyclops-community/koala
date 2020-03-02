@@ -10,6 +10,7 @@ from . import sites
 
 
 Snake = namedtuple('Snake', [])
+ABMPS = namedtuple('ABMPS', ['svd_option'])
 BMPS = namedtuple('BMPS', ['svd_option'])
 Square = namedtuple('Square', ['svd_option'])
 TRG = namedtuple('TRG', ['svd_option'])
@@ -36,6 +37,8 @@ def contract(state, option):
         option = BMPS(None)
     if isinstance(option, Snake):
         return contract_snake(state)
+    elif isinstance(option, ABMPS):
+        return contract_ABMPS(state, svd_option=option.svd_option)
     elif isinstance(option, BMPS):
         return contract_BMPS(state, svd_option=option.svd_option)
     elif isinstance(option, Square):
@@ -44,6 +47,31 @@ def contract(state, option):
         return contract_TRG(state, svd_option=option.svd_option)
     else:
         raise ValueError(f'unknown contraction option: {option}')
+
+
+def contract_ABMPS(state, mps_mult_mpo=None, svd_option=None):
+    """
+    Contract the PEPS by performing alternating vertical and horizontal bondary contractions.
+
+    Parameters
+    ----------
+    mps_mult_mpo: method or None, optional
+        The method used to apply an MPS to another MPS/MPO.
+
+    svdargs: dict, optional
+        Arguments for SVD truncation. Will perform SVD if given.
+
+    Returns
+    -------
+    output: state.backend.tensor or scalar
+        The contraction result.
+    """
+    horizontal = False
+    while state.ncol > 2 and state.nrow > 2:
+        edge = state[:,:2] if horizontal else state[:2]
+        body = state[:,2:] if horizontal else state[2:]
+        state = contract_to_MPS(edge, horizontal=horizontal, svd_option=svd_option).concatenate(body, int(horizontal))
+    return contract_BMPS(state, mps_mult_mpo)
 
 
 def contract_BMPS(state, mps_mult_mpo=None, svd_option=None):
@@ -198,7 +226,7 @@ def contract_to_MPS(state, horizontal=False, mps_mult_mpo=None, svd_option=None)
     if horizontal:
         state.rotate(-1)
     mps = state.grid[0]
-    for mpo in state.grid[1:]:
+    for i, mpo in enumerate(state.grid[1:]):
         mps = mps_mult_mpo(mps, mpo, svd_option)
     mps = mps.reshape(1, -1)
     p = PEPS(mps, state.backend)
@@ -299,8 +327,8 @@ def _contract_TRG(state, tn, svd_option=None):
 
 
 def _mps_mult_mpo(mps, mpo, svd_option=None):
-    if mpo[0].shape[2] == 1:
-        svd_option = None
+    # if mpo[0].shape[2] == 1:
+    #     svd_option = None
     new_mps = np.empty_like(mps)
     for i, (s, o) in enumerate(zip(mps, mpo)):
         if isinstance(svd_option, ImplicitRandomizedSVD):
