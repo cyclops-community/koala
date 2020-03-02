@@ -36,6 +36,14 @@ class PEPS(QuantumState):
     def nsite(self):
         return self.nrow * self.ncol
 
+    @property
+    def dims(self):
+        dims = np.empty_like(self.grid, dtype=tuple)
+        for idx, tsr in np.ndenumerate(self.grid):
+            dims[idx] = tsr.shape
+        return dims
+
+
     def __getitem__(self, position):
         item = self.grid[position]
         if isinstance(item, np.ndarray):
@@ -115,8 +123,8 @@ class PEPS(QuantumState):
         else:
             return NotImplemented
 
-    def norm(self):
-        return sqrt(self.inner(self))
+    def norm(self, contract_option=None):
+        return sqrt(self.inner(self, contract_option=contract_option))
 
     def add(self, other, *, coeff=1.0):
         """
@@ -213,13 +221,11 @@ class PEPS(QuantumState):
     def flip(self, *indices):
         """
         Flip the direction of physical indices for specified sites.
-
         Parameters
         ----------
         indices: iterable, optional
             Indices of sites (tensors) to flip. Specify as `(i, j)` or `((i1, j1), (i2, j2), ...)`, where `i` and `j` should be int.
             Will flip all sites if left as `None`.
-
         Returns
         -------
         output: PEPS
@@ -247,11 +253,9 @@ class PEPS(QuantumState):
         -------
         output: PEPS
         """
-        tn = self.grid
-        for _ in range(num_rotate90 % 4):
-            tn = np.rot90(tn)
+        tn = np.rot90(self.grid, k=num_rotate90).copy()
         for idx, tsr in np.ndenumerate(tn):
-            tn[idx] = sites.rotate_z(tsr, num_rotate90)
+            tn[idx] = sites.rotate_z(tsr, -num_rotate90).copy()
         return PEPS(tn, self.backend)
 
 
