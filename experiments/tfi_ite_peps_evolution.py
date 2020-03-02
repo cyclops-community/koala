@@ -87,7 +87,8 @@ def run_peps(tfi, steps, normfreq, backend, maxrank):
             with Timer(backend, f'peps_apply_operator_{len(sites)}'):
                 qstate.apply_operator(operator, sites, svd_option=ImplicitRandomizedSVD(rank=maxrank))
         if i % normfreq == 0:
-            qstate.site_normalize()
+            with Timer(backend, 'peps_site_normalize'):
+                qstate.site_normalize()
     return qstate
 
 
