@@ -15,6 +15,41 @@ PAULI_Z = np.array([[1,0],[0,-1]], dtype=complex)
 PAULI_ZZ = np.einsum('ij,kl->ikjl', PAULI_Z, PAULI_Z)
 
 
+class Timer:
+    def __init__(self, backend, name):
+        backend = tensorbackends.get(backend)
+        if backend.name in {'ctf', 'ctfview'}:
+            import ctf
+            self.timer = ctf.timer(name)
+        else:
+            self.timer = None
+
+    def __enter__(self):
+        if self.timer is not None:
+            self.timer.start()
+
+    def __exit__(self, type, value, traceback):
+        if self.timer is not None:
+            self.timer.stop()
+
+class TimerEpoch:
+    def __init__(self, backend, name):
+        backend = tensorbackends.get(backend)
+        if backend.name in {'ctf', 'ctfview'}:
+            import ctf
+            self.timer_epoch = ctf.timer_epoch(name)
+        else:
+            self.timer_epoch = None
+
+    def __enter__(self):
+        if self.timer_epoch is not None:
+            self.timer_epoch.begin()
+
+    def __exit__(self, type, value, traceback):
+        if self.timer_epoch is not None:
+            self.timer_epoch.end()
+
+
 class TraversalFieldIsing:
     def __init__(self, J, h, nrows, ncols, tau=0.01, backend='numpy'):
         self.backend = tensorbackends.get(backend)
@@ -49,7 +84,8 @@ def run_peps(tfi, steps, normfreq, backend, maxrank):
     qstate = peps.random(tfi.nrows, tfi.ncols, maxrank, backend=backend)
     for i in range(steps):
         for operator, sites in tfi.trotter_steps():
-            qstate.apply_operator(operator, sites, svd_option=ImplicitRandomizedSVD(rank=maxrank))
+            with Timer(backend, f'peps_apply_operator_{len(sites)}'):
+                qstate.apply_operator(operator, sites, svd_option=ImplicitRandomizedSVD(rank=maxrank))
         if i % normfreq == 0:
             qstate.site_normalize()
     return qstate
@@ -58,11 +94,12 @@ def run_peps(tfi, steps, normfreq, backend, maxrank):
 def main(args):
     tfi = TraversalFieldIsing(args.coupling, args.field, args.nrow, args.ncol, args.tau, args.backend)
 
-    t = time.process_time()
-    peps_qstate = run_peps(tfi, args.steps, args.normfreq, args.backend, args.maxrank)
-    peps_ite_time = time.process_time() - t
-
     backend = tensorbackends.get(args.backend)
+
+    t = time.process_time()
+    with TimerEpoch(backend, 'peps_ite'):
+        peps_qstate = run_peps(tfi, args.steps, args.normfreq, args.backend, args.maxrank)
+    peps_ite_time = time.process_time() - t
 
     if backend.rank == 0:
         print('tfi.nrow', args.nrow)
