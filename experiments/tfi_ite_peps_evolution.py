@@ -101,6 +101,12 @@ def main(args):
         peps_qstate = run_peps(tfi, args.steps, args.normfreq, args.backend, args.maxrank)
     peps_ite_time = time.process_time() - t
 
+    if args.backend in {'ctf', 'ctfview'}:
+        import ctf
+        peps_flops = ctf.get_estimated_flops()
+    else:
+        peps_flops = None
+
     if backend.rank == 0:
         print('tfi.nrow', args.nrow)
         print('tfi.ncol', args.ncol)
@@ -117,6 +123,7 @@ def main(args):
         print('peps.maxrank', args.maxrank)
 
         print('result.peps_ite_time', peps_ite_time)
+        print('result.peps_flops', peps_flops)
 
 
 def build_cli_parser():
