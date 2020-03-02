@@ -36,6 +36,14 @@ class PEPS(QuantumState):
     def nsite(self):
         return self.nrow * self.ncol
 
+    @property
+    def dims(self):
+        dims = np.empty_like(self.grid, dtype=tuple)
+        for idx, tsr in np.ndenumerate(self.grid):
+            dims[idx] = tsr.shape
+        return dims
+
+
     def __getitem__(self, position):
         item = self.grid[position]
         if isinstance(item, np.ndarray):
@@ -59,21 +67,21 @@ class PEPS(QuantumState):
             grid[idx] = tensor.conj()
         return PEPS(grid, self.backend)
 
-    def apply_gate(self, gate, threshold=None, maxrank=None, randomized_svd=False):
+    def apply_gate(self, gate, svd_option=None):
         tensor = tensorize(self.backend, gate.name, *gate.parameters)
-        self.apply_operator(tensor, gate.qubits, threshold=threshold, maxrank=maxrank, randomized_svd=randomized_svd)
+        self.apply_operator(tensor, gate.qubits, svd_option)
 
-    def apply_circuit(self, gates, threshold=None, maxrank=None, randomized_svd=False):
+    def apply_circuit(self, gates, svd_option=None):
         for gate in gates:
-            self.apply_gate(gate, threshold=threshold, maxrank=maxrank, randomized_svd=randomized_svd)
+            self.apply_gate(gate, svd_option)
 
-    def apply_operator(self, operator, sites, threshold=None, maxrank=None, randomized_svd=False):
+    def apply_operator(self, operator, sites, svd_option=None):
         operator = self.backend.astensor(operator)
         positions = [divmod(site, self.ncol) for site in sites]
         if len(positions) == 1:
             update.apply_single_site_operator(self, operator, positions[0])
         elif len(positions) == 2 and is_two_local(*positions):
-            update.apply_local_pair_operator(self, operator, positions, threshold, maxrank, randomized_svd)
+            update.apply_local_pair_operator(self, operator, positions, svd_option)
         else:
             raise ValueError('nonlocal operator is not supported')
 
@@ -115,8 +123,8 @@ class PEPS(QuantumState):
         else:
             return NotImplemented
 
-    def norm(self):
-        return sqrt(self.inner(self))
+    def norm(self, contract_option=None):
+        return sqrt(self.inner(self, contract_option=contract_option))
 
     def add(self, other, *, coeff=1.0):
         """
@@ -150,32 +158,7 @@ class PEPS(QuantumState):
         return np.abs(self.amplitude(indices, contract_option))**2
 
     def expectation(self, observable, use_cache=False, contract_option=None):
-        if use_cache:
-            if contract_option is None:
-                contract_option = contraction.BMPS(svd_option=None)
-            if not isinstance(contract_option, contraction.BMPS):
-                raise ValueError('expectation with cache must use BMPS contraction')
-            return self._expectation_with_cache(observable, contract_option)
-        e = 0
-        for tensor, sites in observable:
-            other = self.copy()
-            other.apply_operator(self.backend.astensor(tensor), sites)
-            e += np.real_if_close(self.inner(other, contract_option))
-        return e
-
-    def _expectation_with_cache(self, observable, bmps_option):
-        env = contraction.create_env_cache(self, bmps_option)
-        e = 0
-        for tensor, sites in observable:
-            other = self.copy()
-            other.apply_operator(self.backend.astensor(tensor), sites)
-            rows = [site // self.ncol for site in sites]
-            up, down = min(rows), max(rows)
-            e += np.real_if_close(contraction.inner_with_env(
-                other[up:down+1].dagger().apply(self[up:down+1]),
-                env, up, down, bmps_option
-            ))
-        return e
+        return braket(self, observable, self, use_cache=use_cache, contract_option=contract_option)
 
     def contract(self, option=None):
         return contraction.contract(self, option)
@@ -238,13 +221,11 @@ class PEPS(QuantumState):
     def flip(self, *indices):
         """
         Flip the direction of physical indices for specified sites.
-
         Parameters
         ----------
         indices: iterable, optional
             Indices of sites (tensors) to flip. Specify as `(i, j)` or `((i1, j1), (i2, j2), ...)`, where `i` and `j` should be int.
             Will flip all sites if left as `None`.
-
         Returns
         -------
         output: PEPS
@@ -272,12 +253,46 @@ class PEPS(QuantumState):
         -------
         output: PEPS
         """
-        tn = self.grid
-        for _ in range(num_rotate90 % 4):
-            tn = np.rot90(tn)
+        tn = np.rot90(self.grid, k=num_rotate90).copy()
         for idx, tsr in np.ndenumerate(tn):
-            tn[idx] = sites.rotate_z(tsr, num_rotate90)
+            tn[idx] = sites.rotate_z(tsr, -num_rotate90).copy()
         return PEPS(tn, self.backend)
+
+
+def braket(p, observable, q, use_cache=False, contract_option=None):
+    if p.backend != q.backend:
+        raise ValueError('two states must use the same backend')
+    if p.nsite != q.nsite:
+        raise ValueError('number of sites must be equal in both states')
+    if use_cache:
+        if contract_option is None:
+            contract_option = contraction.BMPS(svd_option=None)
+        if not isinstance(contract_option, contraction.BMPS):
+            raise ValueError('braket with cache must use BMPS contraction')
+        return _braket_with_cache(p, observable, q, contract_option)
+    e = 0
+    p_dagger = p.dagger()
+    for tensor, sites in observable:
+        other = q.copy()
+        other.apply_operator(q.backend.astensor(tensor), sites)
+        e += p_dagger.apply(other).contract(contract_option)
+    return e
+
+
+def _braket_with_cache(p, observable, q, bmps_option):
+    env = contraction.create_env_cache(p, q, bmps_option)
+    p_dagger = p.dagger()
+    e = 0
+    for tensor, sites in observable:
+        other = q.copy()
+        other.apply_operator(q.backend.astensor(tensor), sites)
+        rows = [site // q.ncol for site in sites]
+        up, down = min(rows), max(rows)
+        e += contraction.inner_with_env(
+            p_dagger[up:down+1].apply(other[up:down+1]),
+            env, up, down, bmps_option
+        )
+    return e
 
 
 def tn_add(backend, a, b, internal_bonds, external_bonds, coeff_a, coeff_b):
