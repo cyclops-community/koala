@@ -4,7 +4,7 @@ This module implements contraction algorithms.
 
 from collections import namedtuple
 import numpy as np
-from tensorbackends.interface import ReducedSVD
+from tensorbackends.interface import ReducedSVD, ImplicitRandomizedSVD
 
 from . import sites
 
@@ -33,7 +33,7 @@ def contract(state, option):
         The contraction result.
     """
     if option is None:
-        option = Snake()
+        option = BMPS(None)
     if isinstance(option, Snake):
         return contract_snake(state)
     elif isinstance(option, BMPS):
@@ -227,14 +227,14 @@ def contract_TRG(state, svd_option=None):
     # base case
     if state.shape <= (2, 2):
         return state.contract_BMPS(svd_option)
-    if not svdargs:
-        svdargs = {'rank': None}
+    # if not svd_option:
+    #     svd_option = {'rank': None}
     # SVD each tensor into two
     tn = np.empty(state.shape + (2,), dtype=object)
     for (i, j), tsr in np.ndenumerate(state.grid):
-        tn[i,j,0], tn[i,j,1] = tbs.einsvd('abcdpq->abi,icdpq' if (i+j) % 2 == 0 else 'abcdpq->aidpq,bci', tsr)
+        tn[i,j,0], tn[i,j,1] = state.backend.einsvd('abcdpq->abi,icdpq' if (i+j) % 2 == 0 else 'abcdpq->aidpq,bci', tsr)
         tn[i,j,(i+j)%2] = tn[i,j,(i+j)%2].reshape(tn[i,j,(i+j)%2].shape + (1, 1))
-    return state._contract_TRG(tn, svd_option)
+    return _contract_TRG(state, tn, svd_option)
 
 
 def _contract_TRG(state, tn, svd_option=None):
@@ -244,7 +244,7 @@ def _contract_TRG(state, tn, svd_option=None):
         p = np.empty((2, 2), dtype=object)
         for i, j in np.ndindex((2, 2)):
             p[i,j] = state.backend.einsum('abipq,icdPQ->abcd(pP)(qQ)' if (i+j) % 2 == 0 else 'aidpq,bciPQ->abcd(pP)(qQ)', tn[i,j][0], tn[i,j][1])
-        return PEPS(p, state.backend).contract_BMPS()
+        return contract_BMPS(PEPS(p, state.backend))
 
     # contract specific horizontal and vertical bonds and SVD truncate the generated squared bonds
     for i, j in np.ndindex(tn.shape[:2]):
@@ -299,13 +299,21 @@ def _contract_TRG(state, tn, svd_option=None):
 
 
 def _mps_mult_mpo(mps, mpo, svd_option=None):
-    # if mpo[0].shape[2] == 1:
-        # svdargs = {}
+    if mpo[0].shape[2] == 1:
+        svd_option = None
     new_mps = np.empty_like(mps)
     for i, (s, o) in enumerate(zip(mps, mpo)):
-        new_mps[i] = sites.contract_x(s, o)
-        if svd_option is not None and i > 0:
-            new_mps[i-1], new_mps[i] = sites.reduce_y(new_mps[i-1], new_mps[i], svd_option)
+        if isinstance(svd_option, ImplicitRandomizedSVD):
+            if i == 0:
+                new_mps[0] = s.backend.einsum('abidpq,iBcDPQ->abBc(dD)(pP)(qQ)', s, o)
+            else:
+                new_mps[i-1], new_mps[i] = s.backend.einsumsvd('aijcdpP,AbkiqQ,kBCjrR->aIcdpP,AbBCI(qr)(QR)', new_mps[i-1], s, o, option=svd_option)
+                if i == len(mps)-1:
+                    new_mps[-1] = s.backend.einsum('abBcdpq->a(bB)cdpq', new_mps[-1])
+        else:
+            new_mps[i] = sites.contract_x(s, o)
+            if svd_option is not None and i > 0:
+                new_mps[i-1], new_mps[i] = sites.reduce_y(new_mps[i-1], new_mps[i], svd_option)
     return new_mps
 
 
