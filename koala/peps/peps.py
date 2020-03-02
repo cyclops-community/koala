@@ -36,6 +36,14 @@ class PEPS(QuantumState):
     def nsite(self):
         return self.nrow * self.ncol
 
+    @property
+    def dims(self):
+        dims = np.empty_like(self.grid, dtype=tuple)
+        for idx, tsr in np.ndenumerate(self.grid):
+            dims[idx] = tsr.shape
+        return dims
+
+
     def __getitem__(self, position):
         item = self.grid[position]
         if isinstance(item, np.ndarray):

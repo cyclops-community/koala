@@ -33,7 +33,7 @@ def contract(state, option):
         The contraction result.
     """
     if option is None:
-        option = BMPS(None)
+        option = Snake()
     if isinstance(option, Snake):
         return contract_snake(state)
     elif isinstance(option, BMPS):
@@ -127,13 +127,15 @@ def contract_snake(state):
     https://arxiv.org/pdf/1905.08394.pdf
     """
     head = state.grid[0,0]
-    for i, mps in enumerate(state.grid):
-        for tsr in mps[int(i==0):]:
-            head = state.backend.einsum('agbcdef->a(gb)cdef',
-            head.reshape(*((head.shape[0] // tsr.shape[0], tsr.shape[0]) + head.shape[1:])))
-            tsr = state.backend.einsum('agbcdef->abc(gd)ef', tsr.reshape(*((1,) + tsr.shape)))
-            head = sites.contract_y(head, tsr)
+    for tsr in state.grid[0,1:]:
+        head = sites.contract_y(head, tsr)
+    for i, mps in enumerate(state.grid[1:]):
         head = head.transpose(2, 1, 0, 3, 4, 5)
+        for tsr in mps[::2 * (i % 2) - 1]:
+            head = state.backend.einsum('agbcdef->a(gb)cdef', 
+                head.reshape(*((head.shape[0] // tsr.shape[0], tsr.shape[0]) + head.shape[1:])))
+            tsr = state.backend.einsum('agbcdef->a' + ('bc(gd)ef' if i % 2 else 'dc(gb)ef'), tsr.reshape(*((1,) + tsr.shape)))
+            head = sites.contract_y(head, tsr)
     return head.item() if head.size == 1 else head.reshape(*[int(head.size ** (1 / state.grid.size))] * state.grid.size)
 
 
