@@ -45,7 +45,7 @@ class TRG(ContractOption):
         self.svd_option_1st = svd_option_1st
         self.svd_option_rem = svd_option_rem
 
-contract_options = (BMPS, Snake, Square, TRG)
+contract_options = (ABMPS, BMPS, Snake, Square, TRG)
 
 
 def contract(state, option):
@@ -57,8 +57,8 @@ def contract(state, option):
     approach: str, optional
         The approach to contract.
 
-    svdargs: dict, optional
-        Arguments for SVD truncation. Will perform SVD if given.
+    option: koala.peps.ContractOption, optional
+        Parameters for performing the contraction.
 
     Returns
     -------
@@ -90,8 +90,8 @@ def contract_ABMPS(state, mps_mult_mpo=None, svd_option=None):
     mps_mult_mpo: method or None, optional
         The method used to apply an MPS to another MPS/MPO.
 
-    svdargs: dict, optional
-        Arguments for SVD truncation. Will perform SVD if given.
+    svd_option: tensorbackends.interface.Option, optional
+        Parameters for SVD truncations. Will perform SVD if given.
 
     Returns
     -------
@@ -116,8 +116,8 @@ def contract_BMPS(state, mps_mult_mpo=None, svd_option=None):
     mps_mult_mpo: method or None, optional
         The method used to apply an MPS to another MPS/MPO.
 
-    svdargs: dict, optional
-        Arguments for SVD truncation. Will perform SVD if given.
+    svd_option: tensorbackends.interface.Option, optional
+        Parameters for SVD truncations. Will perform SVD if given.
 
     Returns
     -------
@@ -149,8 +149,8 @@ def contract_env(state, row_range, col_range, svd_option=None):
         A two-int tuple specifying the column range of the core sites, i.e. [:, col_range[0] : col_range[1]].
         If only an int is given, it is equivalent to (col_range, col_range+1).
 
-    svdargs: dict, optional
-        Arguments for SVD truncation. Will perform SVD if given.
+    svd_option: tensorbackends.interface.Option, optional
+        Parameters for SVD truncations. Will perform SVD if given.
 
     Returns
     -------
@@ -205,8 +205,8 @@ def contract_squares(state, svd_option=None):
 
     Parameters
     ----------
-    svdargs: dict, optional
-        Arguments for SVD truncation. Will perform SVD if given.
+    svd_option: tensorbackends.interface.Option, optional
+        Parameters for SVD truncations. Will perform SVD if given.
 
     Returns
     -------
@@ -243,8 +243,6 @@ def contract_to_MPS(state, horizontal=False, mps_mult_mpo=None, svd_option=None)
     mps_mult_mpo: method or None, optional
         The method used to apply an MPS to another MPS/MPO.
 
-    svdargs: dict, optional
-        Arguments for SVD truncation. Will perform SVD if given.
 
     Returns
     -------
@@ -255,13 +253,12 @@ def contract_to_MPS(state, horizontal=False, mps_mult_mpo=None, svd_option=None)
     if mps_mult_mpo is None:
         mps_mult_mpo = _mps_mult_mpo
     if horizontal:
-        state.rotate(-1)
+        state = state.rotate(-1)
     mps = state.grid[0]
     for i, mpo in enumerate(state.grid[1:]):
         mps = mps_mult_mpo(mps, mpo, svd_option)
-    mps = mps.reshape(1, -1)
-    p = PEPS(mps, state.backend)
-    return p.rotate() if horizontal else p
+    mps = PEPS(mps.reshape(1, -1), state.backend)
+    return mps.rotate() if horizontal else mps
 
 
 def contract_TRG(state, svd_option_1st=None, svd_option_rem=None):
@@ -270,8 +267,12 @@ def contract_TRG(state, svd_option_1st=None, svd_option_rem=None):
 
     Parameters
     ----------
-    svdargs: dict, optional
-        Arguments for SVD truncation. Will perform SVD if given.
+    svd_option_1st: tensorbackends.interface.Option, optional
+        Parameters for the first SVD in TRG. Will default to tensorbackends.interface.ReducedSVD() if not given.
+
+    
+    svd_option_rem: tensorbackends.interface.Option, optional
+        Parameters for the remaining SVD truncations. Will perform SVD if given.
 
     Returns
     -------
@@ -291,7 +292,7 @@ def contract_TRG(state, svd_option_1st=None, svd_option_rem=None):
     for (i, j), tsr in np.ndenumerate(state.grid):
         str_uv = 'abi,icdpq' if (i+j) % 2 == 0 else 'aidpq,bci'
         tn[i,j,0], tn[i,j,1] = svd_splitter(str_uv, *state.backend.einsumsvd(
-            'abcdpq->' + str_uv, tsr, option=(svd_option_1st or ReducedSVD(None))))
+            'abcdpq->' + str_uv, tsr, option=(svd_option_1st or ReducedSVD())))
         tn[i,j,(i+j)%2] = tn[i,j,(i+j)%2].reshape(*(tn[i,j,(i+j)%2].shape + (1, 1)))
     return _contract_TRG(state, tn, svd_option_rem)
 

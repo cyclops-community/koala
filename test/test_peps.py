@@ -149,7 +149,7 @@ class TestPEPS(unittest.TestCase):
         qstate = peps.random(3, 4, 2, backend)
         norm = qstate.norm(contract_option=Snake())
         for contract_option in contract_options:
-            if contract_option is not Snake:
+            if contract_option not in (Snake, TRG):
                 for svd_option in (None, ReducedSVD(16), RandomizedSVD(16), ImplicitRandomizedSVD(16)):
                     with self.subTest(contract_option=contract_option.__name__, svd_option=svd_option):
                         self.assertTrue(np.isclose(norm, qstate.norm(contract_option=contract_option(svd_option))))
