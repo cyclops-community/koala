@@ -20,6 +20,10 @@ class ContractOption:
     def __repr__(self):
         return str(self)
 
+    @property
+    def name(self):
+        return type(self).__name__
+
 
 class ABMPS(ContractOption):
     def __init__(self, svd_option=None):
@@ -41,6 +45,7 @@ class TRG(ContractOption):
         self.svd_option_1st = svd_option_1st
         self.svd_option_rem = svd_option_rem
 
+contract_options = (BMPS, Snake, Square, TRG)
 
 
 def contract(state, option):
@@ -98,6 +103,7 @@ def contract_ABMPS(state, mps_mult_mpo=None, svd_option=None):
         edge = state[:,:2] if horizontal else state[:2]
         body = state[:,2:] if horizontal else state[2:]
         state = contract_to_MPS(edge, horizontal=horizontal, svd_option=svd_option).concatenate(body, int(horizontal))
+        horizontal = not horizontal
     return contract_BMPS(state, mps_mult_mpo)
 
 
@@ -125,7 +131,7 @@ def contract_BMPS(state, mps_mult_mpo=None, svd_option=None):
     for tsr in mps[1:]:
         result = sites.contract_y(result, tsr)
     return result.item() if result.size == 1 else result.reshape(
-        *[int(result.size ** (1 / state.grid.size))] * state.grid.size
+        *[int(round(result.size ** (1 / state.grid.size)))] * state.grid.size
         ).transpose(*[i + j * state.nrow for i, j in np.ndindex(*state.shape)])
 
 
@@ -212,7 +218,7 @@ def contract_squares(state, svd_option=None):
     new_tn = np.empty((int((state.nrow + 1) / 2), state.ncol), dtype=object)
     for ((i, j), a), b in zip(np.ndenumerate(tn[:-1:2,:]), tn[1::2,:].flat):
         new_tn[i,j] = sites.contract_x(a, b)
-        if svd_option is not None:
+        if svd_option is not None and j > 0 and new_tn.shape != (1, 2):
             new_tn[i,j-1], new_tn[i,j] = sites.reduce_y(new_tn[i,j-1], new_tn[i,j], svd_option)
     # append the left edge if nrow/ncol is odd
     if state.nrow % 2 == 1:
@@ -284,9 +290,9 @@ def contract_TRG(state, svd_option_1st=None, svd_option_rem=None):
     tn = np.empty(state.shape + (2,), dtype=object)
     for (i, j), tsr in np.ndenumerate(state.grid):
         str_uv = 'abi,icdpq' if (i+j) % 2 == 0 else 'aidpq,bci'
-        tn[i,j,0], tn[i,j,1] = svd_splitter(str_uv, *state.backend.einsvd(
-            'abcdpq->' + str_uv, tsr, svd_option_1st or ReducedSVD(None)))
-        tn[i,j,(i+j)%2] = tn[i,j,(i+j)%2].reshape(tn[i,j,(i+j)%2].shape + (1, 1))
+        tn[i,j,0], tn[i,j,1] = svd_splitter(str_uv, *state.backend.einsumsvd(
+            'abcdpq->' + str_uv, tsr, option=(svd_option_1st or ReducedSVD(None))))
+        tn[i,j,(i+j)%2] = tn[i,j,(i+j)%2].reshape(*(tn[i,j,(i+j)%2].shape + (1, 1)))
     return _contract_TRG(state, tn, svd_option_rem)
 
 

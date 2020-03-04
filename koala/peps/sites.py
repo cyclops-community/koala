@@ -18,6 +18,8 @@ and leg 5 as the dimension of the dual space w.r.t leg 4. Also conventionally,
 
 import numpy as np
 
+from .utils import svd_splitter
+
 
 def contract_x(a, b):
     return a.backend.einsum('abidpq,iBcDPQ->a(bB)c(dD)(pP)(qQ)', a, b)
@@ -30,25 +32,13 @@ def contract_z(a, b):
 
 
 def reduce_x(a, b, option):
-    a, s, b = a.backend.einsumsvd('abidpq,iBcDPQ->abIdpq,IBcDPQ', a, b, option=option)
-    s = s ** 0.5
-    a = a.backend.einsum('abIdpq,I->abIdpq', a, s)
-    b = b.backend.einsum('IBcDPQ,I->IBcDPQ', b, s)
-    return a, b
+    return svd_splitter('abIdpq,IBcDPQ', *a.backend.einsumsvd('abidpq,iBcDPQ->abIdpq,IBcDPQ', a, b, option=option))
 
 def reduce_y(a, b, option):
-    a, s, b = a.backend.einsumsvd('aicdpq,AbCiPQ->aIcdpq,AbCIPQ', a, b, option=option)
-    s = s ** 0.5
-    a = a.backend.einsum('aIcdpq,I->aIcdpq', a, s)
-    b = b.backend.einsum('AbCIPQ,I->AbCIPQ', b, s)
-    return a, b
+    return svd_splitter('aIcdpq,AbCIPQ', *a.backend.einsumsvd('aicdpq,AbCiPQ->aIcdpq,AbCIPQ', a, b, option=option))
 
 def reduce_z(a, b, option):
-    a, s, b = a.backend.einsumsvd('abcdpi,ABCDiq->abcdpI,ABCDIq', a, b, option=option)
-    s = s ** 0.5
-    a = a.backend.einsum('abcdpI,I->abcdpI', a, s)
-    b = b.backend.einsum('ABCDIq,I->ABCDIq', b, s)
-    return a, b
+    return svd_splitter('abcdpI,ABCDIq', *a.backend.einsumsvd('abcdpi,ABCDiq->abcdpI,ABCDIq', a, b, option=option))
 
 
 def rotate_x(a, n=1):
