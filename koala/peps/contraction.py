@@ -10,11 +10,37 @@ from . import sites
 from .utils import svd_splitter
 
 
-Snake = namedtuple('Snake', [])
-ABMPS = namedtuple('ABMPS', ['svd_option'])
-BMPS = namedtuple('BMPS', ['svd_option'])
-Square = namedtuple('Square', ['svd_option'])
-TRG = namedtuple('TRG', ['svd_option_1st', 'svd_option_rem'])
+class ContractOption:
+    def __str__(self):
+        return '{}({})'.format(
+            type(self).__name__,
+            ','.join('{}={}'.format(k, v) for k, v in vars(self).items())
+        )
+
+    def __repr__(self):
+        return str(self)
+
+
+class ABMPS(ContractOption):
+    def __init__(self, svd_option=None):
+        self.svd_option = svd_option
+
+class BMPS(ContractOption):
+    def __init__(self, svd_option=None):
+        self.svd_option = svd_option
+
+class Snake(ContractOption):
+    pass
+
+class Square(ContractOption):
+    def __init__(self, svd_option=None):
+        self.svd_option = svd_option
+
+class TRG(ContractOption):
+    def __init__(self, svd_option_1st=None, svd_option_rem=None):
+        self.svd_option_1st = svd_option_1st
+        self.svd_option_rem = svd_option_rem
+
 
 
 def contract(state, option):
@@ -156,16 +182,14 @@ def contract_snake(state):
     https://arxiv.org/pdf/1905.08394.pdf
     """
     head = state.grid[0,0]
-    for tsr in state.grid[0,1:]:
-        head = sites.contract_y(head, tsr)
-    for i, mps in enumerate(state.grid[1:]):
-        head = head.transpose(2, 1, 0, 3, 4, 5)
-        for tsr in mps[::2 * (i % 2) - 1]:
-            head = state.backend.einsum('agbcdef->a(gb)cdef', 
-                head.reshape(*((head.shape[0] // tsr.shape[0], tsr.shape[0]) + head.shape[1:])))
-            tsr = state.backend.einsum('agbcdef->a' + ('bc(gd)ef' if i % 2 else 'dc(gb)ef'), tsr.reshape(*((1,) + tsr.shape)))
+    for i, mps in enumerate(state.grid):
+        for tsr in mps[int(i==0):]:
+            head = state.backend.einsum('gabcdef->a(gb)cdef',
+                head.reshape(*((tsr.shape[0], head.shape[0] // tsr.shape[0]) + head.shape[1:])))
+            tsr = state.backend.einsum('agbcdef->abc(gd)ef', tsr.reshape(*((1,) + tsr.shape)))
             head = sites.contract_y(head, tsr)
-    return head.item() if head.size == 1 else head.reshape(*[int(head.size ** (1 / state.grid.size))] * state.grid.size)
+        head = head.transpose(2, 1, 0, 3, 4, 5)
+    return head.item() if head.size == 1 else head.reshape(*[int(round(head.size ** (1 / state.grid.size)))] * state.grid.size)
 
 
 def contract_squares(state, svd_option=None):
@@ -341,8 +365,8 @@ def _mps_mult_mpo(mps, mpo, svd_option=None):
             if i == 0:
                 new_mps[0] = s.backend.einsum('abidpq,iBcDPQ->abBc(dD)(pP)(qQ)', s, o)
             else:
-                new_mps[i-1], new_mps[i] = s.backend.einsumsvd(
-                    'aijcdpP,AbkiqQ,kBCjrR->aIcdpP,AbBCI(qr)(QR)', new_mps[i-1], s, o, option=svd_option)
+                new_mps[i-1], new_mps[i] = svd_splitter('aIcdpP,AbBCIqQ', *s.backend.einsumsvd(
+                    'aijcdpP,AbkiqQ,kBCjrR->aIcdpP,AbBCI(qr)(QR)', new_mps[i-1], s, o, option=svd_option))
                 if i == len(mps)-1:
                     new_mps[-1] = s.backend.einsum('abBcdpq->a(bB)cdpq', new_mps[-1])
         else:
