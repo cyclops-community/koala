@@ -7,12 +7,45 @@ import numpy as np
 from tensorbackends.interface import ReducedSVD, ImplicitRandomizedSVD
 
 from . import sites
+from .utils import svd_splitter
 
 
-Snake = namedtuple('Snake', [])
-BMPS = namedtuple('BMPS', ['svd_option'])
-Square = namedtuple('Square', ['svd_option'])
-TRG = namedtuple('TRG', ['svd_option'])
+class ContractOption:
+    def __str__(self):
+        return '{}({})'.format(
+            type(self).__name__,
+            ','.join('{}={}'.format(k, v) for k, v in vars(self).items())
+        )
+
+    def __repr__(self):
+        return str(self)
+
+    @property
+    def name(self):
+        return type(self).__name__
+
+
+class ABMPS(ContractOption):
+    def __init__(self, svd_option=None):
+        self.svd_option = svd_option
+
+class BMPS(ContractOption):
+    def __init__(self, svd_option=None):
+        self.svd_option = svd_option
+
+class Snake(ContractOption):
+    pass
+
+class Square(ContractOption):
+    def __init__(self, svd_option=None):
+        self.svd_option = svd_option
+
+class TRG(ContractOption):
+    def __init__(self, svd_option_1st=None, svd_option_rem=None):
+        self.svd_option_1st = svd_option_1st
+        self.svd_option_rem = svd_option_rem
+
+contract_options = (ABMPS, BMPS, Snake, Square, TRG)
 
 
 def contract(state, option):
@@ -24,8 +57,8 @@ def contract(state, option):
     approach: str, optional
         The approach to contract.
 
-    svdargs: dict, optional
-        Arguments for SVD truncation. Will perform SVD if given.
+    option: koala.peps.ContractOption, optional
+        Parameters for performing the contraction.
 
     Returns
     -------
@@ -36,14 +69,42 @@ def contract(state, option):
         option = BMPS(None)
     if isinstance(option, Snake):
         return contract_snake(state)
+    elif isinstance(option, ABMPS):
+        return contract_ABMPS(state, svd_option=option.svd_option)
     elif isinstance(option, BMPS):
         return contract_BMPS(state, svd_option=option.svd_option)
     elif isinstance(option, Square):
         return contract_squares(state, svd_option=option.svd_option)
     elif isinstance(option, TRG):
-        return contract_TRG(state, svd_option=option.svd_option)
+        return contract_TRG(state, svd_option_1st=option.svd_option_1st, svd_option_rem=option.svd_option_rem)
     else:
         raise ValueError(f'unknown contraction option: {option}')
+
+
+def contract_ABMPS(state, mps_mult_mpo=None, svd_option=None):
+    """
+    Contract the PEPS by performing alternating vertical and horizontal bondary contractions.
+
+    Parameters
+    ----------
+    mps_mult_mpo: method or None, optional
+        The method used to apply an MPS to another MPS/MPO.
+
+    svd_option: tensorbackends.interface.Option, optional
+        Parameters for SVD truncations. Will perform SVD if given.
+
+    Returns
+    -------
+    output: state.backend.tensor or scalar
+        The contraction result.
+    """
+    horizontal = False
+    while state.ncol > 2 and state.nrow > 2:
+        edge = state[:,:2] if horizontal else state[:2]
+        body = state[:,2:] if horizontal else state[2:]
+        state = contract_to_MPS(edge, horizontal=horizontal, svd_option=svd_option).concatenate(body, int(horizontal))
+        horizontal = not horizontal
+    return contract_BMPS(state, mps_mult_mpo)
 
 
 def contract_BMPS(state, mps_mult_mpo=None, svd_option=None):
@@ -55,8 +116,8 @@ def contract_BMPS(state, mps_mult_mpo=None, svd_option=None):
     mps_mult_mpo: method or None, optional
         The method used to apply an MPS to another MPS/MPO.
 
-    svdargs: dict, optional
-        Arguments for SVD truncation. Will perform SVD if given.
+    svd_option: tensorbackends.interface.Option, optional
+        Parameters for SVD truncations. Will perform SVD if given.
 
     Returns
     -------
@@ -70,7 +131,7 @@ def contract_BMPS(state, mps_mult_mpo=None, svd_option=None):
     for tsr in mps[1:]:
         result = sites.contract_y(result, tsr)
     return result.item() if result.size == 1 else result.reshape(
-        *[int(result.size ** (1 / state.grid.size))] * state.grid.size
+        *[int(round(result.size ** (1 / state.grid.size)))] * state.grid.size
         ).transpose(*[i + j * state.nrow for i, j in np.ndindex(*state.shape)])
 
 
@@ -88,8 +149,8 @@ def contract_env(state, row_range, col_range, svd_option=None):
         A two-int tuple specifying the column range of the core sites, i.e. [:, col_range[0] : col_range[1]].
         If only an int is given, it is equivalent to (col_range, col_range+1).
 
-    svdargs: dict, optional
-        Arguments for SVD truncation. Will perform SVD if given.
+    svd_option: tensorbackends.interface.Option, optional
+        Parameters for SVD truncations. Will perform SVD if given.
 
     Returns
     -------
@@ -127,16 +188,14 @@ def contract_snake(state):
     https://arxiv.org/pdf/1905.08394.pdf
     """
     head = state.grid[0,0]
-    for tsr in state.grid[0,1:]:
-        head = sites.contract_y(head, tsr)
-    for i, mps in enumerate(state.grid[1:]):
-        head = head.transpose(2, 1, 0, 3, 4, 5)
-        for tsr in mps[::2 * (i % 2) - 1]:
-            head = state.backend.einsum('agbcdef->a(gb)cdef', 
-                head.reshape(*((head.shape[0] // tsr.shape[0], tsr.shape[0]) + head.shape[1:])))
-            tsr = state.backend.einsum('agbcdef->a' + ('bc(gd)ef' if i % 2 else 'dc(gb)ef'), tsr.reshape(*((1,) + tsr.shape)))
+    for i, mps in enumerate(state.grid):
+        for tsr in mps[int(i==0):]:
+            head = state.backend.einsum('gabcdef->a(gb)cdef',
+                head.reshape(*((tsr.shape[0], head.shape[0] // tsr.shape[0]) + head.shape[1:])))
+            tsr = state.backend.einsum('agbcdef->abc(gd)ef', tsr.reshape(*((1,) + tsr.shape)))
             head = sites.contract_y(head, tsr)
-    return head.item() if head.size == 1 else head.reshape(*[int(head.size ** (1 / state.grid.size))] * state.grid.size)
+        head = head.transpose(2, 1, 0, 3, 4, 5)
+    return head.item() if head.size == 1 else head.reshape(*[int(round(head.size ** (1 / state.grid.size)))] * state.grid.size)
 
 
 def contract_squares(state, svd_option=None):
@@ -146,8 +205,8 @@ def contract_squares(state, svd_option=None):
 
     Parameters
     ----------
-    svdargs: dict, optional
-        Arguments for SVD truncation. Will perform SVD if given.
+    svd_option: tensorbackends.interface.Option, optional
+        Parameters for SVD truncations. Will perform SVD if given.
 
     Returns
     -------
@@ -159,7 +218,7 @@ def contract_squares(state, svd_option=None):
     new_tn = np.empty((int((state.nrow + 1) / 2), state.ncol), dtype=object)
     for ((i, j), a), b in zip(np.ndenumerate(tn[:-1:2,:]), tn[1::2,:].flat):
         new_tn[i,j] = sites.contract_x(a, b)
-        if svd_option is not None:
+        if svd_option is not None and j > 0 and new_tn.shape != (1, 2):
             new_tn[i,j-1], new_tn[i,j] = sites.reduce_y(new_tn[i,j-1], new_tn[i,j], svd_option)
     # append the left edge if nrow/ncol is odd
     if state.nrow % 2 == 1:
@@ -184,8 +243,6 @@ def contract_to_MPS(state, horizontal=False, mps_mult_mpo=None, svd_option=None)
     mps_mult_mpo: method or None, optional
         The method used to apply an MPS to another MPS/MPO.
 
-    svdargs: dict, optional
-        Arguments for SVD truncation. Will perform SVD if given.
 
     Returns
     -------
@@ -196,23 +253,26 @@ def contract_to_MPS(state, horizontal=False, mps_mult_mpo=None, svd_option=None)
     if mps_mult_mpo is None:
         mps_mult_mpo = _mps_mult_mpo
     if horizontal:
-        state.rotate(-1)
+        state = state.rotate(-1)
     mps = state.grid[0]
-    for mpo in state.grid[1:]:
+    for i, mpo in enumerate(state.grid[1:]):
         mps = mps_mult_mpo(mps, mpo, svd_option)
-    mps = mps.reshape(1, -1)
-    p = PEPS(mps, state.backend)
-    return p.rotate() if horizontal else p
+    mps = PEPS(mps.reshape(1, -1), state.backend)
+    return mps.rotate() if horizontal else mps
 
 
-def contract_TRG(state, svd_option=None):
+def contract_TRG(state, svd_option_1st=None, svd_option_rem=None):
     """
     Contract the PEPS using Tensor Renormalization Group.
 
     Parameters
     ----------
-    svdargs: dict, optional
-        Arguments for SVD truncation. Will perform SVD if given.
+    svd_option_1st: tensorbackends.interface.Option, optional
+        Parameters for the first SVD in TRG. Will default to tensorbackends.interface.ReducedSVD() if not given.
+
+    
+    svd_option_rem: tensorbackends.interface.Option, optional
+        Parameters for the remaining SVD truncations. Will perform SVD if given.
 
     Returns
     -------
@@ -226,15 +286,15 @@ def contract_TRG(state, svd_option=None):
     """
     # base case
     if state.shape <= (2, 2):
-        return state.contract_BMPS(svd_option)
-    # if not svd_option:
-    #     svd_option = {'rank': None}
+        return contract_BMPS(state, svd_option_rem)
     # SVD each tensor into two
     tn = np.empty(state.shape + (2,), dtype=object)
     for (i, j), tsr in np.ndenumerate(state.grid):
-        tn[i,j,0], tn[i,j,1] = state.backend.einsvd('abcdpq->abi,icdpq' if (i+j) % 2 == 0 else 'abcdpq->aidpq,bci', tsr)
-        tn[i,j,(i+j)%2] = tn[i,j,(i+j)%2].reshape(tn[i,j,(i+j)%2].shape + (1, 1))
-    return _contract_TRG(state, tn, svd_option)
+        str_uv = 'abi,icdpq' if (i+j) % 2 == 0 else 'aidpq,bci'
+        tn[i,j,0], tn[i,j,1] = svd_splitter(str_uv, *state.backend.einsumsvd(
+            'abcdpq->' + str_uv, tsr, option=(svd_option_1st or ReducedSVD())))
+        tn[i,j,(i+j)%2] = tn[i,j,(i+j)%2].reshape(*(tn[i,j,(i+j)%2].shape + (1, 1)))
+    return _contract_TRG(state, tn, svd_option_rem)
 
 
 def _contract_TRG(state, tn, svd_option=None):
@@ -243,7 +303,8 @@ def _contract_TRG(state, tn, svd_option=None):
     if tn.shape == (2, 2, 2):
         p = np.empty((2, 2), dtype=object)
         for i, j in np.ndindex((2, 2)):
-            p[i,j] = state.backend.einsum('abipq,icdPQ->abcd(pP)(qQ)' if (i+j) % 2 == 0 else 'aidpq,bciPQ->abcd(pP)(qQ)', tn[i,j][0], tn[i,j][1])
+            p[i,j] = state.backend.einsum(
+                'abipq,icdPQ->abcd(pP)(qQ)' if (i+j) % 2 == 0 else 'aidpq,bciPQ->abcd(pP)(qQ)', tn[i,j][0], tn[i,j][1])
         return contract_BMPS(PEPS(p, state.backend))
 
     # contract specific horizontal and vertical bonds and SVD truncate the generated squared bonds
@@ -251,17 +312,19 @@ def _contract_TRG(state, tn, svd_option=None):
         if j > 0 and j % 2 == 0:
             k = 1 - i % 2
             l = j - ((i // 2 * 2 + j) % 4 == 0)
-            tn[i,l][k] = state.backend.einsum('ibapq,ABiPQ->A(bB)a(pP)(qQ)' if k else 'biapq,BAiPQ->(bB)Aa(pP)(qQ)', tn[i,j-1][k], tn[i,j][k])
-            if i % 2 == 1:
-                # FIXME
-                tn[i-1,l][1], tn[i,l][0] = state.backend.einsum('aidpq,iBCPQ->aBCd(pP)(qQ)', tn[i-1,l][1], tn[i,l][0], svd_option)
+            tn[i,l][k] = state.backend.einsum(
+                'ibapq,ABiPQ->A(bB)a(pP)(qQ)' if k else 'biapq,BAiPQ->(bB)Aa(pP)(qQ)', tn[i,j-1][k], tn[i,j][k])
+            if i % 2 == 1 and svd_option is not None:
+                tn[i-1,l][1], tn[i,l][0] = svd_splitter('aIdpq,IBCPQ', *state.backend.einsumsvd(
+                    'aidpq,iBCPQ->aIdpq,IBCPQ', tn[i-1,l][1], tn[i,l][0], option=svd_option))
         if i > 0 and i % 2 == 0:
             k = 1 - j % 2
             l = int((i + j // 2 * 2) % 4 == 0)
-            tn[i-l,j][l] = state.backend.einsum('biapq,iBAPQ->(bB)Aa(pP)(qQ)' if k else 'aibpq,iABPQ->aA(bB)(pP)(qQ)', tn[i-1,j][1], tn[i,j][0])
-            if j % 2 == 1:
-                # FIXME
-                tn[i-l,j-1][l], tn[i-l,j][l] = state.backend.einsum('icdpq,ABiPQ->ABcd(pP)(qQ)', tn[i-l,j-1][l], tn[i-l,j][l], svd_option)
+            tn[i-l,j][l] = state.backend.einsum(
+                'biapq,iBAPQ->(bB)Aa(pP)(qQ)' if k else 'aibpq,iABPQ->aA(bB)(pP)(qQ)', tn[i-1,j][1], tn[i,j][0])
+            if j % 2 == 1 and svd_option is not None:
+                tn[i-l,j-1][l], tn[i-l,j][l] = svd_splitter('Icdpq,ABIPQ', *state.backend.einsumsvd(
+                    'icdpq,ABiPQ->Icdpq,ABIPQ', tn[i-l,j-1][l], tn[i-l,j][l], option=svd_option))
 
     # contract specific diagonal bonds and generate a smaller tensor network
     new_tn = np.empty((tn.shape[0] // 2 + 1, tn.shape[1] // 2 + 1, 2), dtype=object)
@@ -273,7 +336,8 @@ def _contract_TRG(state, tn, svd_option=None):
             elif tn[i,j][1] is None:
                 new_tn[m,n][1] = tn[i,j][0]
             else:
-                new_tn[m,n][1] = state.backend.einsum('abipq,iCAPQ->bC(aA)(pP)(qQ)' if i == 0 else 'aibpq,iCBPQ->aCb+Bp+Pq+Q', tn[i,j][0], tn[i,j][1])
+                new_tn[m,n][1] = state.backend.einsum(
+                    'abipq,iCAPQ->bC(aA)(pP)(qQ)' if i == 0 else 'aibpq,iCBPQ->aC(bB)(pP)(qQ)', tn[i,j][0], tn[i,j][1])
         elif (i + j) % 4 == 0 and i % 2 == 1:
             new_tn[m,n][0] = state.backend.einsum('abipq,iBCPQ->a(bB)C(pP)(qQ)', tn[i,j][0], tn[i,j][1])
         elif (i + j) % 4 == 3 and i % 2 == 0:
@@ -287,27 +351,29 @@ def _contract_TRG(state, tn, svd_option=None):
                 new_tn[m,n][1] = tn[i,j][1]
 
     # SVD truncate the squared bonds generated by the diagonal contractions
-    for i, j in np.ndindex(new_tn.shape[:2]):
-        if (i + j) % 2 == 0 and new_tn[i,j][0] is not None and new_tn[i,j][1] is not None:
-            # FIXME
-            new_tn[i,j][0], new_tn[i,j][1] = state.backend.einsum('abipq,iCDPQ->abCD(pP)(qQ)', new_tn[i,j][0], new_tn[i,j][1], svd_option)
-        elif (i + j) % 2 == 1:
-            # FIXME
-            new_tn[i,j][0], new_tn[i,j][1] = state.backend.einsum('aidpq,BCiPQ->aBCd(pP)(qQ)', new_tn[i,j][0], new_tn[i,j][1], svd_option)
+    if svd_option is not None:
+        for i, j in np.ndindex(new_tn.shape[:2]):
+            if (i + j) % 2 == 0 and new_tn[i,j][0] is not None and new_tn[i,j][1] is not None:
+                new_tn[i,j][0], new_tn[i,j][1] = svd_splitter('abIpq,ICDPQ', *state.backend.einsumsvd(
+                    'abipq,iCDPQ->abIpq,ICDPQ', new_tn[i,j][0], new_tn[i,j][1], option=svd_option))
+            elif (i + j) % 2 == 1:
+                new_tn[i,j][0], new_tn[i,j][1] = svd_splitter('aIdpq,BCIPQ', *state.backend.einsumsvd(
+                    'aidpq,BCiPQ->aIdpq,BCIPQ', new_tn[i,j][0], new_tn[i,j][1], option=svd_option))
 
     return _contract_TRG(state, new_tn, svd_option)
 
 
 def _mps_mult_mpo(mps, mpo, svd_option=None):
-    if mpo[0].shape[2] == 1:
-        svd_option = None
+    # if mpo[0].shape[2] == 1:
+    #     svd_option = None
     new_mps = np.empty_like(mps)
     for i, (s, o) in enumerate(zip(mps, mpo)):
         if isinstance(svd_option, ImplicitRandomizedSVD):
             if i == 0:
                 new_mps[0] = s.backend.einsum('abidpq,iBcDPQ->abBc(dD)(pP)(qQ)', s, o)
             else:
-                new_mps[i-1], new_mps[i] = s.backend.einsumsvd('aijcdpP,AbkiqQ,kBCjrR->aIcdpP,AbBCI(qr)(QR)', new_mps[i-1], s, o, option=svd_option)
+                new_mps[i-1], new_mps[i] = svd_splitter('aIcdpP,AbBCIqQ', *s.backend.einsumsvd(
+                    'aijcdpP,AbkiqQ,kBCjrR->aIcdpP,AbBCI(qr)(QR)', new_mps[i-1], s, o, option=svd_option))
                 if i == len(mps)-1:
                     new_mps[-1] = s.backend.einsum('abBcdpq->a(bB)cdpq', new_mps[-1])
         else:
