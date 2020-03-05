@@ -149,16 +149,15 @@ class TestPEPS(unittest.TestCase):
         qstate = peps.random(3, 4, 2, backend)
         norm = qstate.norm(contract_option=Snake())
         for contract_option in contract_options:
-            if contract_option not in (Snake, TRG):
+            if contract_option is not Snake:
                 for svd_option in (None, ReducedSVD(16), RandomizedSVD(16), ImplicitRandomizedSVD(16)):
                     with self.subTest(contract_option=contract_option.__name__, svd_option=svd_option):
                         self.assertTrue(np.isclose(norm, qstate.norm(contract_option=contract_option(svd_option))))
 
     def test_contract_vector(self, backend):
         qstate = peps.random(3, 3, 2, backend)
-        statevector = qstate.statevector(contract_option=Snake()).tensor.numpy()
-        for contract_option in (BMPS,):
-            for svd_option in (None, ReducedSVD(16), RandomizedSVD(16), ImplicitRandomizedSVD(16)):
-                with self.subTest(contract_option=contract_option.__name__, svd_option=svd_option):
-                    self.assertTrue(np.allclose(statevector, qstate.statevector(
-                        contract_option=contract_option(svd_option)).tensor.numpy()))
+        statevector = qstate.statevector(contract_option=Snake())
+        for contract_option in [BMPS(None), BMPS(ReducedSVD(16)), BMPS(RandomizedSVD(16)), BMPS(ImplicitRandomizedSVD(16))]:
+            with self.subTest(contract_option=contract_option):
+                contract_result = qstate.statevector(contract_option=contract_option)
+                self.assertTrue(backend.allclose(statevector.tensor, contract_result.tensor))
