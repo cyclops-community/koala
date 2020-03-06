@@ -1,10 +1,11 @@
 import unittest
 
 import numpy as np
-from tensorbackends.interface import ImplicitRandomizedSVD, ReducedSVD
+from tensorbackends.interface import ImplicitRandomizedSVD, ReducedSVD, RandomizedSVD
 from tensorbackends.utils import test_with_backend
 
 from koala import Observable, peps, statevector, Gate
+from koala.peps import contract_options, Snake, ABMPS, BMPS, Square, TRG
 
 
 @test_with_backend()
@@ -18,7 +19,7 @@ class TestPEPS(unittest.TestCase):
             Gate('CX', [], [1,4]),
             Gate('S', [], [1]),
         ])
-        self.assertTrue(np.isclose(qstate.rotate().norm(), 1))
+        self.assertTrue(np.isclose(qstate.norm(), 1))
         qstate *= 2
         self.assertTrue(np.isclose(qstate.norm(), 2))
         qstate /= 2j
@@ -143,3 +144,20 @@ class TestPEPS(unittest.TestCase):
         psi = psi.statevector()
         phi = statevector.computational_zeros(6, backend=backend)
         self.assertTrue(np.isclose(psi.inner(phi), 0.5))
+
+    def test_contract_scalar(self, backend):
+        qstate = peps.random(3, 4, 2, backend)
+        norm = qstate.norm(contract_option=Snake())
+        for contract_option in contract_options:
+            if contract_option is not Snake:
+                for svd_option in (None, ReducedSVD(16), RandomizedSVD(16), ImplicitRandomizedSVD(16)):
+                    with self.subTest(contract_option=contract_option.__name__, svd_option=svd_option):
+                        self.assertTrue(np.isclose(norm, qstate.norm(contract_option=contract_option(svd_option))))
+
+    def test_contract_vector(self, backend):
+        qstate = peps.random(3, 3, 2, backend)
+        statevector = qstate.statevector(contract_option=Snake())
+        for contract_option in [BMPS(None), BMPS(ReducedSVD(16)), BMPS(RandomizedSVD(16)), BMPS(ImplicitRandomizedSVD(16))]:
+            with self.subTest(contract_option=contract_option):
+                contract_result = qstate.statevector(contract_option=contract_option)
+                self.assertTrue(backend.allclose(statevector.tensor, contract_result.tensor))

@@ -61,11 +61,11 @@ def run_statevector(tfi, steps, normfreq, backend):
     return qstate
 
 
-def run_peps(tfi, steps, normfreq, backend, threshold, maxrank, randomized_svd):
+def run_peps(tfi, steps, normfreq, backend, maxrank):
     qstate = peps.computational_zeros(tfi.nrows, tfi.ncols, backend=backend)
     for i in range(steps):
         for operator, sites in tfi.trotter_steps():
-            qstate.apply_operator(operator, sites, threshold=threshold, maxrank=maxrank, randomized_svd=randomized_svd)
+            qstate.apply_operator(operator, sites, svd_option=ReducedSVD(maxrank))
         if i % normfreq == 0:
             qstate.site_normalize()
     qstate /= qstate.norm()
@@ -84,7 +84,7 @@ def main(args):
     statevector_expectiation_time = time.process_time() - t
 
     t = time.process_time()
-    peps_qstate = run_peps(tfi, args.steps, args.normfreq, backend=args.backend, threshold=args.threshold, maxrank=args.maxrank, randomized_svd=args.randomized_svd)
+    peps_qstate = run_peps(tfi, args.steps, args.normfreq, backend=args.backend, maxrank=args.maxrank)
     peps_ite_time = time.process_time() - t
 
     t = time.process_time()
@@ -110,7 +110,6 @@ def main(args):
         print('backend.name', args.backend)
         print('backend.nproc', backend.nproc)
 
-        print('peps.threshold', args.threshold)
         print('peps.maxrank', args.maxrank)
 
         print('result.statevector_energy', statevector_energy)
