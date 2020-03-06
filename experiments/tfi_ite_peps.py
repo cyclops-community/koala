@@ -50,11 +50,11 @@ class TraversalFieldIsing:
             yield self.trottered_double_gate, pos
 
 
-def run_peps(tfi, steps, normfreq, backend, threshold, maxrank, randomized_svd):
+def run_peps(tfi, steps, normfreq, backend, maxrank):
     qstate = peps.computational_zeros(tfi.nrows, tfi.ncols, backend=backend)
     for i in range(steps):
         for operator, sites in tfi.trotter_steps():
-            qstate.apply_operator(operator, sites, threshold=threshold, maxrank=maxrank, randomized_svd=randomized_svd)
+            qstate.apply_operator(operator, sites, svd_option=ImplicitRandomizedSVD(maxrank))
         if i % normfreq == 0:
             qstate.site_normalize()
     qstate /= qstate.norm()
@@ -65,7 +65,7 @@ def main(args):
     tfi = TraversalFieldIsing(args.coupling, args.field, args.nrow, args.ncol, args.tau, args.backend)
 
     t = time.process_time()
-    peps_qstate = run_peps(tfi, args.steps, args.normfreq, backend=args.backend, threshold=args.threshold, maxrank=args.maxrank, randomized_svd=args.randomized_svd)
+    peps_qstate = run_peps(tfi, args.steps, args.normfreq, backend=args.backend, maxrank=args.maxrank)
     peps_ite_time = time.process_time() - t
 
     t = time.process_time()
@@ -99,7 +99,6 @@ def main(args):
         print('backend.name', args.backend)
         print('backend.nproc', backend.nproc)
 
-        print('peps.threshold', args.threshold)
         print('peps.maxrank', args.maxrank)
 
         print('result.peps_energy', peps_energy)
@@ -129,9 +128,7 @@ def build_cli_parser():
     parser.add_argument('-nf', '--normfreq', help='ITE normalization frequency', type=int, default=10)
 
     parser.add_argument('-b', '--backend', help='the backend to use', choices=['numpy', 'ctf', 'ctfview'], default='numpy')
-    parser.add_argument('-th', '--threshold', help='the threshold in trucated SVD when applying gates', type=float, default=1e-5)
     parser.add_argument('-mr', '--maxrank', help='the maxrank in trucated SVD when applying gates', type=int, default=2)
-    parser.add_argument('-rsvd', '--randomized_svd', help='use randomized SVD when applying gates', default=False, action='store_true')
 
     return parser
 

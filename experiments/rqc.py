@@ -6,6 +6,7 @@ from collections import namedtuple
 import numpy as np
 
 import tensorbackends
+from tensorbackends.interface import ReducedSVD, RandomizedSVD, ImplicitRandomizedSVD
 import koala.statevector
 import koala.peps
 
@@ -50,9 +51,9 @@ def run_statevector(circuit, backend):
     qstate.apply_circuit(circuit.gates)
     return qstate
 
-def run_peps(circuit, threshold, maxrank, randomized_svd, backend):
+def run_peps(circuit, maxrank, backend):
     qstate = koala.peps.computational_zeros(circuit.nrow, circuit.ncol, backend=backend)
-    qstate.apply_circuit(circuit.gates, threshold=threshold, maxrank=maxrank, randomized_svd=randomized_svd)
+    qstate.apply_circuit(circuit.gates, svd_option=ReducedSVD(maxrank))
     return qstate
 
 
@@ -65,7 +66,7 @@ def main(args):
     statevector_time = time.process_time() - t
 
     t = time.process_time()
-    qstate_peps = run_peps(circuit, backend=args.backend, threshold=args.threshold, maxrank=args.maxrank, randomized_svd=args.randomized_svd)
+    qstate_peps = run_peps(circuit, backend=args.backend, maxrank=args.maxrank)
     peps_time = time.process_time() - t
 
     t = time.process_time()
@@ -88,7 +89,6 @@ def main(args):
         print('backend.name', args.backend)
         print('backend.nproc', backend.nproc)
 
-        print('peps.threshold', args.threshold)
         print('peps.maxrank', args.maxrank)
 
         print('result.statevector_time', statevector_time)
@@ -107,9 +107,7 @@ def build_cli_parser():
     parser.add_argument('-s', '--seed', help='random circuit seed', type=int, default=0)
 
     parser.add_argument('-b', '--backend', help='the backend to use', choices=['numpy', 'ctf', 'ctfview'], default='numpy')
-    parser.add_argument('-th', '--threshold', help='the threshold in truncated SVD when applying gates', type=float, default=1e-5)
     parser.add_argument('-mr', '--maxrank', help='the maxrank in truncated SVD when applying gates', type=int, default=None)
-    parser.add_argument('-rsvd', '--randomized_svd', help='use randomized SVD when applying gates', default=False, action='store_true')
 
     return parser
 
