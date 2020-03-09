@@ -3,6 +3,23 @@ from tensorbackends.interface import ReducedSVD
 def apply_single_site_operator(state, operator, position):
     state.grid[position] = state.backend.einsum('ijklxp,xy->ijklyp', state.grid[position], operator)
 
+class Timer:
+    def __init__(self, backend, name):
+        import tensorbackends
+        backend = tensorbackends.get(backend)
+        if backend.name in {'ctf', 'ctfview'}:
+            import ctf
+            self.timer = ctf.timer(name)
+        else:
+            self.timer = None
+
+    def __enter__(self):
+        if self.timer is not None:
+            self.timer.start()
+
+    def __exit__(self, type, value, traceback):
+        if self.timer is not None:
+            self.timer.stop()
 
 def apply_local_pair_operator(state, operator, positions, svd_option):
     assert len(positions) == 2
@@ -34,12 +51,15 @@ def apply_local_pair_operator(state, operator, positions, svd_option):
     else:
         assert False
 
-    xq, xr = state.backend.einqr(split_x_subscripts, x)
-    yq, yr = state.backend.einqr(split_y_subscripts, y)
-    u, s, v = state.backend.einsumsvd('ikxp,jkyq,xyuv->isup,jsvq', xr, yr, operator, option=svd_option)
-    s = s ** 0.5
-    state.grid[x_pos] = state.backend.einsum(recover_x_subscripts, xq, u, s)
-    state.grid[y_pos] = state.backend.einsum(recover_y_subscripts, yq, v, s)
+    with Timer(state.backend, 'qr_split_sites'):
+        xq, xr = state.backend.einqr(split_x_subscripts, x)
+        yq, yr = state.backend.einqr(split_y_subscripts, y)
+    with Timer(state.backend, 'einsumsvd_apply_operators'):
+        u, s, v = state.backend.einsumsvd('ikxp,jkyq,xyuv->isup,jsvq', xr, yr, operator, option=svd_option)
+    with Timer(state.backend, 'recover_sites'):
+        s = s ** 0.5
+        state.grid[x_pos] = state.backend.einsum(recover_x_subscripts, xq, u, s)
+        state.grid[y_pos] = state.backend.einsum(recover_y_subscripts, yq, v, s)
 
 
 # def apply_local_pair_operator(state, operator, positions, svd_option):
