@@ -5,7 +5,7 @@ from koala import statevector, peps, Observable
 from koala.peps import sites
 
 import tensorbackends
-from tensorbackends.interface import ImplicitRandomizedSVD, RandomizedSVD
+from tensorbackends.interface import ImplicitRandomizedSVD, RandomizedSVD, ReducedSVD
 import numpy as np
 import scipy.linalg as sla
 
@@ -85,7 +85,7 @@ def run_peps(tfi, steps, normfreq, backend, maxrank):
     for i in range(steps):
         for operator, sites in tfi.trotter_steps():
             with Timer(backend, f'peps_apply_operator_{len(sites)}'):
-                qstate.apply_operator(operator, sites, svd_option=RandomizedSVD(rank=maxrank))
+                qstate.apply_operator(operator, sites, svd_option=ReducedSVD(rank=maxrank))
         if i % normfreq == 0:
             with Timer(backend, 'peps_site_normalize'):
                 qstate.site_normalize()
