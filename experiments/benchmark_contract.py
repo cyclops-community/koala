@@ -34,12 +34,14 @@ def benchmark_norm(p, contract_option, standard=1, path=None, verbosity=1, reps=
         else:
             pr.disable()
 
+    if standard is None:
+        standard = result
     abs_err = abs(result - standard)
     rel_err = abs(abs_err / standard)
 
     data = {
         'shape': p.shape,
-        'bond_dim': p[0,0].shape[1],
+        'dims': p.dims.tolist(),
         'contract_option': str(contract_option),
         'result': result,
         'time': duration / reps,
@@ -67,14 +69,17 @@ def benchmark_norm(p, contract_option, standard=1, path=None, verbosity=1, reps=
                 ps.sort_stats('tottime').print_stats(15)
                 print(s.getvalue())
                 
-        if path:
-            import json
-            with open(path, 'r') as fd:
-                database = json.load(fd)
-            with open(path, 'w+') as fd:
-                # database[str(contract_option)] = database.get(str(contract_option), []).append(data)
-                database.append(data)
-                json.dump(database, fd, indent=4)
-
     return data
 
+
+def save_data(data, path):
+    import json
+    with open(path, 'r') as fd:
+        try:
+            database = json.load(fd)
+        except json.decoder.JSONDecodeError:
+            database = []
+    with open(path, 'w+') as fd:
+        # database[str(contract_option)] = database.get(str(contract_option), []).append(data)
+        database.append(data)
+        json.dump(database, fd, indent=4)
