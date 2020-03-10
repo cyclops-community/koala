@@ -5,10 +5,10 @@ from koala.peps import contract_options, Snake, ABMPS, BMPS, Square, TRG
 from tensorbackends.interface import ReducedSVD, RandomizedSVD, ImplicitRandomizedSVD
 
 
-def update_save_data(data, args):
+def update_save_data(data, args, rank):
     data['nlayer'] = args.nlayer
     data['seed'] = args.seed
-    if args.path:
+    if args.path and rank == 0:
         save_data(data, args.path)
     return data
 
@@ -16,14 +16,14 @@ def update_save_data(data, args):
 def run(args):
     qstate = run_peps(generate(args.nrow, args.ncol, args.nlayer, args.seed), args.maxrank, args.backend)
     standard = update_save_data(benchmark_norm(
-        qstate, contract_option=Snake(), path=args.path, reps=2, profile=args.profile), args)
+        qstate, contract_option=Snake(), path=args.path, reps=2, profile=args.profile), args, qstate.backend.rank)
     maxrank = args.maxrank ** 2
     for contract_option in contract_options:
         if contract_option is not Snake:
             for svd_option in (ReducedSVD(maxrank), RandomizedSVD(maxrank), ImplicitRandomizedSVD(maxrank)):
                 update_save_data(benchmark_norm(qstate, 
                     TRG(svd_option, svd_option) if contract_option is TRG else contract_option(svd_option), 
-                    standard=standard['result'], path=args.path, reps=2, profile=args.profile), args)
+                    standard=standard['result'], path=args.path, reps=2, profile=args.profile), args, qstate.backend.rank)
 
 
 

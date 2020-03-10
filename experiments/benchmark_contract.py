@@ -1,4 +1,4 @@
-from time import process_time
+from time import time
 import subprocess
 
 
@@ -18,15 +18,15 @@ def benchmark_norm(p, contract_option, standard=1, path=None, verbosity=1, reps=
             pr = cProfile.Profile()
             pr.enable()
 
-    start = process_time()
+    start = time()
     best = None
     for i in range(reps):
-        loop_start = process_time()
+        loop_start = time()
         result = p.norm(contract_option)
-        loop_duration = process_time() - loop_start
+        loop_duration = time() - loop_start
         if not best or best > loop_duration:
             best = loop_duration
-    duration = process_time() - start
+    duration = time() - start
     
     if profile:
         if is_ctf:
@@ -41,7 +41,7 @@ def benchmark_norm(p, contract_option, standard=1, path=None, verbosity=1, reps=
 
     data = {
         'shape': p.shape,
-        'dims': p.dims.tolist(),
+        'dims': str(p.dims),
         'contract_option': str(contract_option),
         'result': result,
         'time': duration / reps,
