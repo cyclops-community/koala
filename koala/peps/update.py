@@ -26,14 +26,21 @@ class QRUpdate(UpdateOption):
         self.svd_option = svd_option
 
 
+class DefaultUpdate(UpdateOption):
+    def __init__(self, rank=None):
+        self.rank = rank
+
+
 def apply_single_site_operator(state, operator, position):
     state.grid[position] = state.backend.einsum('ijklxp,xy->ijklyp', state.grid[position], operator)
 
 
 def apply_local_pair_operator(state, operator, positions, update_option):
     if update_option is None:
-        update_option = QRUpdate()
-    if isinstance(update_option, DirectUpdate):
+        update_option = DefaultUpdate()
+    if isinstance(update_option, DefaultUpdate):
+        return apply_local_pair_operator_qr(state, operator, positions, ReducedSVD(update_option.rank))
+    elif isinstance(update_option, DirectUpdate):
         return apply_local_pair_operator_direct(state, operator, positions, update_option.svd_option)
     elif isinstance(update_option, QRUpdate):
         return apply_local_pair_operator_qr(state, operator, positions, update_option.svd_option)
