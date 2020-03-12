@@ -45,7 +45,20 @@ class TestPEPS(unittest.TestCase):
             Gate('CX', [], [0,3]),
             Gate('CX', [], [1,4]),
             Gate('S', [], [1]),
-        ], svd_option=ImplicitRandomizedSVD(rank=2))
+        ], update_option=peps.DirectUpdate(ImplicitRandomizedSVD(rank=2)))
+        contract_option = peps.BMPS(ReducedSVD(rank=2))
+        self.assertTrue(np.isclose(qstate.amplitude([1,0,0,1,0,0], contract_option), 1/np.sqrt(2)))
+        self.assertTrue(np.isclose(qstate.amplitude([1,1,0,1,1,0], contract_option), 1j/np.sqrt(2)))
+
+    def test_amplitude_qr_update(self, backend):
+        qstate = peps.computational_zeros(2, 3, backend=backend)
+        qstate.apply_circuit([
+            Gate('X', [], [0]),
+            Gate('H', [], [1]),
+            Gate('CX', [], [0,3]),
+            Gate('CX', [], [1,4]),
+            Gate('S', [], [1]),
+        ], update_option=peps.QRUpdate(ReducedSVD(rank=2)))
         contract_option = peps.BMPS(ReducedSVD(rank=2))
         self.assertTrue(np.isclose(qstate.amplitude([1,0,0,1,0,0], contract_option), 1/np.sqrt(2)))
         self.assertTrue(np.isclose(qstate.amplitude([1,1,0,1,1,0], contract_option), 1j/np.sqrt(2)))
@@ -98,7 +111,7 @@ class TestPEPS(unittest.TestCase):
             Gate('X', [], [0]),
             Gate('CX', [], [0,3]),
             Gate('H', [], [2]),
-        ], svd_option=ImplicitRandomizedSVD(rank=2))
+        ], update_option=peps.DirectUpdate(ImplicitRandomizedSVD(rank=2)))
         observable = 1.5 * Observable.sum([
             Observable.Z(0) * 2,
             Observable.Z(1), 
@@ -129,7 +142,7 @@ class TestPEPS(unittest.TestCase):
             Gate('H', [], [0]),
             Gate('CX', [], [0,3]),
             Gate('H', [], [3]),
-        ], svd_option=ImplicitRandomizedSVD(rank=2))
+        ], update_option=peps.DirectUpdate(ImplicitRandomizedSVD(rank=2)))
         phi = peps.computational_zeros(2, 3, backend=backend)
         contract_option = peps.BMPS(ReducedSVD(rank=2))
         self.assertTrue(np.isclose(psi.inner(phi, contract_option), 0.5))
