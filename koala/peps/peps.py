@@ -5,7 +5,7 @@ This module defines PEPS and operations on it.
 import random
 from math import sqrt
 from numbers import Number
-from string import ascii_letters as chars
+from itertools import chain
 
 import numpy as np
 import tensorbackends
@@ -43,6 +43,17 @@ class PEPS(QuantumState):
             dims[idx] = tsr.shape
         return dims
 
+    def get_average_bond_dim(self):
+        s = 0
+        for (i,j), tsr in np.ndenumerate(self.grid):
+            if i > 0: s += tsr.shape[0]
+            if j < self.ncol - 1: s += tsr.shape[1]
+            if i < self.nrow - 1: s += tsr.shape[2]
+            if j > 0: s += tsr.shape[3]
+        return s / (2 * self.nrow * self.ncol - self.nrow - self.ncol) / 2
+
+    def get_max_bond_dim(self):
+        return max(chain.from_iterable(site.shape[0:4] for _, site in np.ndenumerate(self.grid)))
 
     def __getitem__(self, position):
         item = self.grid[position]
