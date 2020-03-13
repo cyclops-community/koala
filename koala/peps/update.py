@@ -166,7 +166,7 @@ def apply_local_pair_operator_gram_qr_local(state, operator, positions, rank):
         # local
         gram_a = gram_a.numpy().reshape(d*xi, d*xi)
         w, v = la.eigh(gram_a, overwrite_a=True)
-        s = w ** 0.5
+        s = np.clip(w, 0, None) ** 0.5
         s_pinv = np.divide(1, s, out=np.zeros_like(s), where=s!=0)
         r = np.einsum('j,ij->ji', s, v.conj()).reshape(d*xi, d, xi)
         r_inv = np.einsum('j,ij->ij', s_pinv, v).reshape(d, xi, d*xi)
