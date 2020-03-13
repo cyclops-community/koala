@@ -152,8 +152,8 @@ def apply_local_pair_operator_gram_qr_local(state, operator, positions, rank):
     elif x_pos[1] > y_pos[1]: # [y x]
         gram_x_subscripts = 'abcdxp,abcDXp->xdXD'
         gram_y_subscripts = 'edghyq,eDghYq->ydYD'
-        xq_subscripts = 'abcdxp,xci->abcpi'
-        yq_subscripts = 'cfghyq,ycj->eghqj'
+        xq_subscripts = 'abcdxp,xdi->abcpi'
+        yq_subscripts = 'edghyq,ydj->eghqj'
         recover_x_subscripts = 'abcpi,isu,s->abcsup'
         recover_y_subscripts = 'eghqj,jsv,s->esghvq'
     else:
