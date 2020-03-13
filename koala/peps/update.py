@@ -1,6 +1,7 @@
 from tensorbackends.interface import ReducedSVD
 import numpy as np
 import scipy.linalg as la
+import tensorbackends
 
 
 class UpdateOption:
@@ -32,6 +33,22 @@ class DefaultUpdate(UpdateOption):
     def __init__(self, rank=None):
         self.rank = rank
 
+class Timer:
+    def __init__(self, backend, name):
+        backend = tensorbackends.get(backend)
+        if backend.name in {'ctf', 'ctfview'}:
+            import ctf
+            self.timer = ctf.timer(name)
+        else:
+            self.timer = None
+
+    def __enter__(self):
+        if self.timer is not None:
+            self.timer.start()
+
+    def __exit__(self, type, value, traceback):
+        if self.timer is not None:
+            self.timer.stop()
 
 def apply_single_site_operator(state, operator, position):
     state.grid[position] = state.backend.einsum('ijklxp,xy->ijklyp', state.grid[position], operator)
@@ -164,22 +181,29 @@ def apply_local_pair_operator_gram_qr_local(state, operator, positions, rank):
         d, xi = gram_a.shape[:2]
 
         # local
-        gram_a = gram_a.numpy().reshape(d*xi, d*xi)
-        w, v = la.eigh(gram_a, overwrite_a=True)
-        s = np.clip(w, 0, None) ** 0.5
-        s_pinv = np.divide(1, s, out=np.zeros_like(s), where=s!=0)
-        r = np.einsum('j,ij->ji', s, v.conj()).reshape(d*xi, d, xi)
-        r_inv = np.einsum('j,ij->ij', s_pinv, v).reshape(d, xi, d*xi)
+        with Timer(state.backend, 'KOALA_gram_qr_local'):
+            with Timer(state.backend, 'KOALA_ctf_to_numpy'):
+                gram_a = gram_a.numpy().reshape(d*xi, d*xi)
+            with Timer(state.backend, 'KOALA_eigh_etc'):
+                w, v = la.eigh(gram_a, overwrite_a=True)
+                s = np.clip(w, 0, None) ** 0.5
+                s_pinv = np.divide(1, s, out=np.zeros_like(s), where=s!=0)
+                r = np.einsum('j,ij->ji', s, v.conj()).reshape(d*xi, d, xi)
+                r_inv = np.einsum('j,ij->ij', s_pinv, v).reshape(d, xi, d*xi)
 
-        r = backend.astensor(r)
-        r_inv = backend.astensor(r_inv)
-        q = backend.einsum(q_subscripts, a, r_inv)
+        with Timer(state.backend, 'KOALA_numpy_to_ctf'):
+            r = backend.astensor(r)
+            r_inv = backend.astensor(r_inv)
+        with Timer(state.backend, 'KOALA_multiply_r_inv'):
+            q = backend.einsum(q_subscripts, a, r_inv)
         return q, r
 
-    xq, xr = gram_qr_local(state.backend, x, gram_x_subscripts, xq_subscripts)
-    yq, yr = gram_qr_local(state.backend, y, gram_y_subscripts, yq_subscripts)
-
-    u, s, v = state.backend.einsumsvd('ixk,jyk,xyuv->isu,jsv', xr, yr, operator, option=ReducedSVD(rank))
-    s = s ** 0.5
-    state.grid[x_pos] = state.backend.einsum(recover_x_subscripts, xq, u, s)
-    state.grid[y_pos] = state.backend.einsum(recover_y_subscripts, yq, v, s)
+    with Timer(state.backend, 'KOALA_gram_qr'):
+        xq, xr = gram_qr_local(state.backend, x, gram_x_subscripts, xq_subscripts)
+        yq, yr = gram_qr_local(state.backend, y, gram_y_subscripts, yq_subscripts)
+    with Timer(state.backend, 'KOALA_einsumsvd'):
+        u, s, v = state.backend.einsumsvd('ixk,jyk,xyuv->isu,jsv', xr, yr, operator, option=ReducedSVD(rank))
+    with Timer(state.backend, 'KOALA_recover_site'):
+        s = s ** 0.5
+        state.grid[x_pos] = state.backend.einsum(recover_x_subscripts, xq, u, s)
+        state.grid[y_pos] = state.backend.einsum(recover_y_subscripts, yq, v, s)
