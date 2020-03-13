@@ -5,7 +5,7 @@ This module defines PEPS and operations on it.
 import random
 from math import sqrt
 from numbers import Number
-from string import ascii_letters as chars
+from itertools import chain
 
 import numpy as np
 import tensorbackends
@@ -43,6 +43,17 @@ class PEPS(QuantumState):
             dims[idx] = tsr.shape
         return dims
 
+    def get_average_bond_dim(self):
+        s = 0
+        for (i,j), tsr in np.ndenumerate(self.grid):
+            if i > 0: s += tsr.shape[0]
+            if j < self.ncol - 1: s += tsr.shape[1]
+            if i < self.nrow - 1: s += tsr.shape[2]
+            if j > 0: s += tsr.shape[3]
+        return s / (2 * self.nrow * self.ncol - self.nrow - self.ncol) / 2
+
+    def get_max_bond_dim(self):
+        return max(chain.from_iterable(site.shape[0:4] for _, site in np.ndenumerate(self.grid)))
 
     def __getitem__(self, position):
         item = self.grid[position]
@@ -67,21 +78,21 @@ class PEPS(QuantumState):
             grid[idx] = tensor.conj()
         return PEPS(grid, self.backend)
 
-    def apply_gate(self, gate, svd_option=None):
+    def apply_gate(self, gate, update_option=None):
         tensor = tensorize(self.backend, gate.name, *gate.parameters)
-        self.apply_operator(tensor, gate.qubits, svd_option)
+        self.apply_operator(tensor, gate.qubits, update_option)
 
-    def apply_circuit(self, gates, svd_option=None):
+    def apply_circuit(self, gates, update_option=None):
         for gate in gates:
-            self.apply_gate(gate, svd_option)
+            self.apply_gate(gate, update_option)
 
-    def apply_operator(self, operator, sites, svd_option=None):
+    def apply_operator(self, operator, sites, update_option=None):
         operator = self.backend.astensor(operator)
         positions = [divmod(site, self.ncol) for site in sites]
         if len(positions) == 1:
             update.apply_single_site_operator(self, operator, positions[0])
         elif len(positions) == 2 and is_two_local(*positions):
-            update.apply_local_pair_operator(self, operator, positions, svd_option)
+            update.apply_local_pair_operator(self, operator, positions, update_option)
         else:
             raise ValueError('nonlocal operator is not supported')
 
