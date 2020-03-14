@@ -5,9 +5,27 @@ This module implements contraction algorithms.
 from collections import namedtuple
 import numpy as np
 from tensorbackends.interface import ReducedSVD, ImplicitRandomizedSVD
+import tensorbackends
 
 from . import sites
 from .utils import svd_splitter
+
+class Timer:
+    def __init__(self, backend, name):
+        backend = tensorbackends.get(backend)
+        if backend.name in {'ctf', 'ctfview'}:
+            import ctf
+            self.timer = ctf.timer(name)
+        else:
+            self.timer = None
+
+    def __enter__(self):
+        if self.timer is not None:
+            self.timer.start()
+
+    def __exit__(self, type, value, traceback):
+        if self.timer is not None:
+            self.timer.stop()
 
 
 class ContractOption:
@@ -125,11 +143,13 @@ def contract_BMPS(state, mps_mult_mpo=None, svd_option=None):
         The contraction result.
     """
     # contract boundary MPS down
-    mps = contract_to_MPS(state, False, mps_mult_mpo, svd_option).grid.reshape(-1)
+    with Timer(state.backend, 'PEPS_contract_to_MPS'):
+        mps = contract_to_MPS(state, False, mps_mult_mpo, svd_option).grid.reshape(-1)
     # contract the last MPS to a single tensor
     result = mps[0]
-    for tsr in mps[1:]:
-        result = sites.contract_y(result, tsr)
+    with Timer(state.backend, 'PEPS_contract_MPS'):
+        for tsr in mps[1:]:
+            result = sites.contract_y(result, tsr)
     return result.item() if result.size == 1 else result.reshape(
         *[int(round(result.size ** (1 / state.grid.size)))] * state.grid.size
         ).transpose(*[i + j * state.nrow for i, j in np.ndindex(*state.shape)])
@@ -256,7 +276,8 @@ def contract_to_MPS(state, horizontal=False, mps_mult_mpo=None, svd_option=None)
         state = state.rotate(-1)
     mps = state.grid[0]
     for i, mpo in enumerate(state.grid[1:]):
-        mps = mps_mult_mpo(mps, mpo, svd_option)
+        with Timer(state.backend, 'PEPS_mps_mult_mpo'):
+            mps = mps_mult_mpo(mps, mpo, svd_option)
     mps = PEPS(mps.reshape(1, -1), state.backend)
     return mps.rotate() if horizontal else mps
 
@@ -372,8 +393,10 @@ def _mps_mult_mpo(mps, mpo, svd_option=None):
             if i == 0:
                 new_mps[0] = s.backend.einsum('abidpq,iBcDPQ->abBc(dD)(pP)(qQ)', s, o)
             else:
-                new_mps[i-1], new_mps[i] = svd_splitter('aIcdpP,AbBCIqQ', *s.backend.einsumsvd(
-                    'aijcdpP,AbkiqQ,kBCjrR->aIcdpP,AbBCI(qr)(QR)', new_mps[i-1], s, o, option=svd_option))
+                with Timer(s.backend, 'PEPS_einsumsvd'):
+                    einsumsvd_result = s.backend.einsumsvd('aijcdpP,AbkiqQ,kBCjrR->aIcdpP,AbBCI(qr)(QR)', new_mps[i-1], s, o, option=svd_option)
+                with Timer(s.backend, 'PEPS_svd_splitter'):
+                    new_mps[i-1], new_mps[i] = svd_splitter('aIcdpP,AbBCIqQ', *einsumsvd_result)
                 if i == len(mps)-1:
                     new_mps[-1] = s.backend.einsum('abBcdpq->a(bB)cdpq', new_mps[-1])
         else:
