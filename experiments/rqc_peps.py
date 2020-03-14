@@ -70,7 +70,7 @@ def run_peps(circuit, maxrank, backend):
         ctf.initialize_flops_counter()
     for i, layer in enumerate(circuit.gates):
         t = time.process_time()
-        qstate.apply_circuit(layer, svd_option=ImplicitRandomizedSVD(maxrank))
+        qstate.apply_circuit(layer, update_option=peps.DefaultUpdate(maxrank))
         t = time.process_time() - t
         if rank == 0: print(f'layer_time_{i}', t, flush=True)
         if rank == 0 and is_ctf:
