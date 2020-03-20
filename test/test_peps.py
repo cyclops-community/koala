@@ -185,7 +185,7 @@ class TestPEPS(unittest.TestCase):
         self.assertTrue(np.isclose(psi.inner(phi), 0.5))
 
     def test_contract_scalar(self, backend):
-        qstate = peps.random(3, 4, 2, backend)
+        qstate = peps.random(3, 4, 2, backend=backend)
         norm = qstate.norm(contract_option=Snake())
         for contract_option in contract_options:
             if contract_option is not Snake:
@@ -194,7 +194,7 @@ class TestPEPS(unittest.TestCase):
                         self.assertTrue(np.isclose(norm, qstate.norm(contract_option=contract_option(svd_option))))
 
     def test_contract_vector(self, backend):
-        qstate = peps.random(3, 3, 2, backend)
+        qstate = peps.random(3, 3, 2, backend=backend)
         statevector = qstate.statevector(contract_option=Snake())
         for contract_option in [BMPS(None), BMPS(ReducedSVD(16)), BMPS(RandomizedSVD(16)), BMPS(ImplicitRandomizedSVD(16))]:
             with self.subTest(contract_option=contract_option):
