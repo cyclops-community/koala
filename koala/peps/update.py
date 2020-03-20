@@ -65,6 +65,21 @@ def apply_local_pair_operator(state, operator, positions, update_option):
         raise ValueError(f'unknown update option: {update_option}')
 
 
+def truncate(state, update_option):
+    identities = {}
+    def apply_identity(x_pos, y_pos):
+        dims = state.grid[x_pos].shape[4], state.grid[y_pos].shape[4]
+        if dims not in identities:
+            identities[dims] = state.backend.astensor(np.einsum('xu,yv->xyuv', np.eye(dims[0]), np.eye(dims[1])))
+        apply_local_pair_operator(state, identities[dims], (x_pos, y_pos), update_option)
+
+    for i, j in np.ndindex(*state.shape):
+        if i < state.shape[0] - 1:
+            apply_identity((i, j), (i+1, j))
+        if j < state.shape[1] - 1:
+            apply_identity((i, j), (i, j+1))
+
+
 def apply_local_pair_operator_direct(state, operator, positions, svd_option):
     assert len(positions) == 2
     if svd_option is None:

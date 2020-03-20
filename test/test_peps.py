@@ -200,3 +200,11 @@ class TestPEPS(unittest.TestCase):
             with self.subTest(contract_option=contract_option):
                 contract_result = qstate.statevector(contract_option=contract_option)
                 self.assertTrue(backend.allclose(statevector.tensor, contract_result.tensor))
+
+    def test_truncate(self, backend):
+        for phys, dual in [(1,1), (2,1), (2,2)]:
+            with self.subTest(phyiscal_dim=phys, dual_dim=dual):
+                qstate = peps.random(2, 3, 4, phys, dual, backend=backend)
+                self.assertEqual(qstate.get_average_bond_dim(), 4)
+                qstate.truncate(peps.DefaultUpdate(rank=2))
+                self.assertEqual(qstate.get_average_bond_dim(), 2)

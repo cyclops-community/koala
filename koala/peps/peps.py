@@ -55,6 +55,9 @@ class PEPS(QuantumState):
     def get_max_bond_dim(self):
         return max(chain.from_iterable(site.shape[0:4] for _, site in np.ndenumerate(self.grid)))
 
+    def truncate(self, update_option=None):
+        update.truncate(self, update_option)
+
     def __getitem__(self, position):
         item = self.grid[position]
         if isinstance(item, np.ndarray):
