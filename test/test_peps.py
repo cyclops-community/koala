@@ -89,6 +89,27 @@ class TestPEPS(unittest.TestCase):
         self.assertTrue(np.isclose(qstate.amplitude([1,0,0,1,0,0], contract_option), 1/np.sqrt(2)))
         self.assertTrue(np.isclose(qstate.amplitude([1,1,0,1,1,0], contract_option), 1j/np.sqrt(2)))
 
+    def test_amplitude_nonlocal(self, backend):
+        update_options = [
+            None,
+            peps.DirectUpdate(ImplicitRandomizedSVD(rank=2)),
+            peps.QRUpdate(ReducedSVD(rank=2)),
+            peps.LocalGramQRUpdate(rank=2),
+            peps.LocalGramQRSVDUpdate(rank=2),
+        ]
+        for option in update_options:
+            with self.subTest(update_option=option):
+                qstate = peps.computational_zeros(2, 3, backend=backend)
+                qstate.apply_circuit([
+                    Gate('X', [], [0]),
+                    Gate('H', [], [1]),
+                    Gate('CX', [], [0,5]),
+                    Gate('CX', [], [1,3]),
+                    Gate('S', [], [1]),
+                ], update_option=option)
+                self.assertTrue(np.isclose(qstate.amplitude([1,0,0,0,0,1]), 1/np.sqrt(2)))
+                self.assertTrue(np.isclose(qstate.amplitude([1,1,0,1,0,1]), 1j/np.sqrt(2)))
+
     def test_probablity(self, backend):
         qstate = peps.computational_zeros(2, 3, backend=backend)
         qstate.apply_circuit([

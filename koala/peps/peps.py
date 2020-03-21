@@ -96,6 +96,8 @@ class PEPS(QuantumState):
             update.apply_single_site_operator(self, operator, positions[0])
         elif len(positions) == 2 and is_two_local(*positions):
             update.apply_local_pair_operator(self, operator, positions, update_option)
+        elif len(positions) == 2:
+            update.apply_nonlocal_pair_operator(self, operator, positions, update_option)
         else:
             raise ValueError('nonlocal operator is not supported')
 

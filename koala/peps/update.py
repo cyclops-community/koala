@@ -2,6 +2,7 @@ import tensorbackends
 from tensorbackends.interface import ReducedSVD
 import numpy as np
 import scipy.linalg as la
+from .. import gates
 
 
 class UpdateOption:
@@ -52,15 +53,71 @@ def apply_local_pair_operator(state, operator, positions, update_option):
     if update_option is None:
         update_option = DefaultUpdate()
     if isinstance(update_option, DefaultUpdate):
-        return apply_local_pair_operator_qr(state, operator, positions, ReducedSVD(update_option.rank))
+        apply_local_pair_operator_qr(state, operator, positions, ReducedSVD(update_option.rank))
     elif isinstance(update_option, DirectUpdate):
-        return apply_local_pair_operator_direct(state, operator, positions, update_option.svd_option)
+        apply_local_pair_operator_direct(state, operator, positions, update_option.svd_option)
     elif isinstance(update_option, QRUpdate):
-        return apply_local_pair_operator_qr(state, operator, positions, update_option.svd_option)
+        apply_local_pair_operator_qr(state, operator, positions, update_option.svd_option)
     elif isinstance(update_option, LocalGramQRUpdate):
-        return apply_local_pair_operator_local_gram_qr(state, operator, positions, update_option.rank)
+        apply_local_pair_operator_local_gram_qr(state, operator, positions, update_option.rank)
     elif isinstance(update_option, LocalGramQRSVDUpdate):
-        return apply_local_pair_operator_local_gram_qr_svd(state, operator, positions, update_option.rank)
+        apply_local_pair_operator_local_gram_qr_svd(state, operator, positions, update_option.rank)
+    else:
+        raise ValueError(f'unknown update option: {update_option}')
+
+
+def apply_nonlocal_pair_operator(state, operator, positions, update_option):
+    assert len(positions) == 2
+    x_pos, y_pos = positions
+
+    path = []
+    moved_y_pos = [None, None]
+    if y_pos[0] < x_pos[0]:
+        path.extend(((i,y_pos[1]),(i+1,y_pos[1])) for i in range(y_pos[0], x_pos[0]-1))
+        moved_y_pos[0] = x_pos[0] - 1
+    elif y_pos[0] > x_pos[0]:
+        path.extend(((i,y_pos[1]),(i-1,y_pos[1])) for i in range(y_pos[0], x_pos[0]+1, -1))
+        moved_y_pos[0] = x_pos[0] + 1
+    else:
+        moved_y_pos[0] = x_pos[0]
+    if y_pos[1] < x_pos[1]:
+        path.extend(((moved_y_pos[0],j),(moved_y_pos[0],j+1)) for j in range(y_pos[1], x_pos[1]-1))
+        moved_y_pos[1] = x_pos[1] - 1
+    elif y_pos[1] > x_pos[1]:
+        path.extend(((moved_y_pos[0],j),(moved_y_pos[0],j-1)) for j in range(y_pos[1], x_pos[1]+1, -1))
+        moved_y_pos[1] = x_pos[1] + 1
+    else:
+        moved_y_pos[1] = x_pos[1]
+    if moved_y_pos[0] != x_pos[0] and moved_y_pos[1] < x_pos[1]:
+        new_moved_y_pos = [moved_y_pos[0], moved_y_pos[1]+1]
+        path.append((tuple(moved_y_pos),tuple(new_moved_y_pos)))
+        moved_y_pos = new_moved_y_pos
+    elif moved_y_pos[0] != x_pos[0] and moved_y_pos[1] > x_pos[1]:
+        new_moved_y_pos = [moved_y_pos[0], moved_y_pos[1]-1]
+        path.append((tuple(moved_y_pos),tuple(new_moved_y_pos)))
+        moved_y_pos = new_moved_y_pos
+    moved_y_pos = tuple(moved_y_pos)
+
+    for u, v in path:
+        swap_local_pair(state, u, v, update_option)
+    apply_local_pair_operator(state, operator, [x_pos, moved_y_pos], update_option)
+    for u, v in reversed(path):
+        swap_local_pair(state, u, v, update_option)
+
+
+def swap_local_pair(state, x_pos, y_pos, update_option):
+    if update_option is None:
+        update_option = DefaultUpdate()
+    if isinstance(update_option, DefaultUpdate):
+        swap_local_pair_qr(state, x_pos, y_pos, ReducedSVD(update_option.rank))
+    elif isinstance(update_option, DirectUpdate):
+        swap_local_pair_direct(state, x_pos, y_pos, update_option.svd_option)
+    elif isinstance(update_option, QRUpdate):
+        swap_local_pair_qr(state, x_pos, y_pos, update_option.svd_option)
+    elif isinstance(update_option, LocalGramQRUpdate):
+        swap_local_pair_local_gram_qr(state, x_pos, y_pos, update_option.rank)
+    elif isinstance(update_option, LocalGramQRSVDUpdate):
+        swap_local_pair_local_gram_qr_svd(state, x_pos, y_pos, update_option.rank)
     else:
         raise ValueError(f'unknown update option: {update_option}')
 
@@ -274,6 +331,199 @@ def apply_local_pair_operator_local_gram_qr_svd(state, operator, positions, rank
     s **= 0.5
     u = numpy_backend.einsum('xki,isu,s->kxsu', xr_inv, u, s)
     v = numpy_backend.einsum('ykj,jsv,s->kysv', yr_inv, v, s)
+
+    u = state.backend.astensor(u)
+    v = state.backend.astensor(v)
+    state.grid[x_pos] = state.backend.einsum(recover_x_subscripts, x, u)
+    state.grid[y_pos] = state.backend.einsum(recover_y_subscripts, y, v)
+
+
+def swap_local_pair_direct(state, x_pos, y_pos, svd_option):
+    if svd_option is None:
+        svd_option = ReducedSVD()
+
+    if x_pos[0] < y_pos[0]: # [x y]^T
+        prod_subscripts = 'abcdxp,cfghyq->absdyq,sfghxp'
+        scale_u_subscripts = 'absdyq,s->absdyq'
+        scale_v_subscripts = 'sfghxp,s->sfghxp'
+    elif x_pos[0] > y_pos[0]: # [y x]^T
+        prod_subscripts = 'abcdxp,efahyq->sbcdyq,efshxp'
+        scale_u_subscripts = 'sbcdyq,s->sbcdyq'
+        scale_v_subscripts = 'efshxp,s->efshxp'
+    elif x_pos[1] < y_pos[1]: # [x y]
+        prod_subscripts = 'abcdxp,efgbyq->ascdyq,efgsxp'
+        scale_u_subscripts = 'ascdyq,s->ascdyq'
+        scale_v_subscripts = 'efgsxp,s->efgsxp'
+    elif x_pos[1] > y_pos[1]: # [y x]
+        prod_subscripts = 'abcdxp,edghyq->abcsyq,esghxp'
+        scale_u_subscripts = 'abcsyq,s->abcsyq'
+        scale_v_subscripts = 'esghxp,s->esghxp'
+    else:
+        assert False
+
+    x, y = state.grid[x_pos], state.grid[y_pos]
+    u, s, v = state.backend.einsumsvd(prod_subscripts, x, y, option=svd_option)
+    s = s ** 0.5
+    u = state.backend.einsum(scale_u_subscripts, u, s)
+    v = state.backend.einsum(scale_v_subscripts, v, s)
+    state.grid[x_pos] = u
+    state.grid[y_pos] = v
+
+
+def swap_local_pair_qr(state, x_pos, y_pos, svd_option):
+    if svd_option is None:
+        svd_option = ReducedSVD()
+
+    if x_pos[0] < y_pos[0]: # [x y]^T
+        split_x_subscripts = 'abcdxp->abdi,icxp'
+        split_y_subscripts = 'cfghyq->fghj,jcyq'
+        recover_x_subscripts = 'abdi,isyq,s->absdyq'
+        recover_y_subscripts = 'fghj,jsxp,s->sfghxp'
+    elif x_pos[0] > y_pos[0]: # [y x]^T
+        split_x_subscripts = 'abcdxp->bcdi,iaxp'
+        split_y_subscripts = 'efahyq->efhj,jayq'
+        recover_x_subscripts = 'bcdi,isyq,s->sbcdyq'
+        recover_y_subscripts = 'efhj,jsxp,s->efshxp'
+    elif x_pos[1] < y_pos[1]: # [x y]
+        split_x_subscripts = 'abcdxp->acdi,ibxp'
+        split_y_subscripts = 'efgbyq->efgj,jbyq'
+        recover_x_subscripts = 'acdi,isyq,s->ascdyq'
+        recover_y_subscripts = 'efgj,jsxp,s->efgsxp'
+    elif x_pos[1] > y_pos[1]: # [y x]
+        split_x_subscripts = 'abcdxp->abci,idxp'
+        split_y_subscripts = 'edghyq->eghj,jdyq'
+        recover_x_subscripts = 'abci,isyq,s->abcsyq'
+        recover_y_subscripts = 'eghj,jsxp,s->esghxp'
+    else:
+        assert False
+
+    x, y = state.grid[x_pos], state.grid[y_pos]
+
+    xq, xr = state.backend.einqr(split_x_subscripts, x)
+    yq, yr = state.backend.einqr(split_y_subscripts, y)
+
+    u, s, v = state.backend.einsumsvd('ikxp,jkyq->isyq,jsxp', xr, yr, option=svd_option)
+    s = s ** 0.5
+    state.grid[x_pos] = state.backend.einsum(recover_x_subscripts, xq, u, s)
+    state.grid[y_pos] = state.backend.einsum(recover_y_subscripts, yq, v, s)
+
+
+def swap_local_pair_local_gram_qr(state, x_pos, y_pos, rank):
+    if x_pos[0] < y_pos[0]: # [x y]^T
+        gram_x_subscripts = 'abcdxp,abCdXP->xpcXPC'
+        gram_y_subscripts = 'cfghyq,CfghYQ->yqcYQC'
+        xq_subscripts = 'abcdxp,xpci->abdi'
+        yq_subscripts = 'cfghyq,yqcj->fghj'
+        recover_x_subscripts = 'abdi,isyq,s->absdyq'
+        recover_y_subscripts = 'fghj,jsxp,s->sfghxp'
+    elif x_pos[0] > y_pos[0]: # [y x]^T
+        gram_x_subscripts = 'abcdxp,AbcdXP->xpaXPA'
+        gram_y_subscripts = 'efahyq,efAhYQ->yqaYQA'
+        xq_subscripts = 'abcdxp,xpai->bcdi'
+        yq_subscripts = 'efahyq,yqaj->efhj'
+        recover_x_subscripts = 'bcdi,isyq,s->sbcdyq'
+        recover_y_subscripts = 'efhj,jsxp,s->efshxp'
+    elif x_pos[1] < y_pos[1]: # [x y]
+        gram_x_subscripts = 'abcdxp,aBcdXP->xpbXPB'
+        gram_y_subscripts = 'efgbyq,efgBYQ->yqbYQB'
+        xq_subscripts = 'abcdxp,xpbi->acdi'
+        yq_subscripts = 'efgbyq,yqbj->efgj'
+        recover_x_subscripts = 'acdi,isyq,s->ascdyq'
+        recover_y_subscripts = 'efgj,jsxp,s->efgsxp'
+    elif x_pos[1] > y_pos[1]: # [y x]
+        gram_x_subscripts = 'abcdxp,abcDXP->xpdXPD'
+        gram_y_subscripts = 'edghyq,eDghYQ->yqdYQD'
+        xq_subscripts = 'abcdxp,xpdi->abci'
+        yq_subscripts = 'edghyq,yqdj->eghj'
+        recover_x_subscripts = 'abci,isyq,s->abcsyq'
+        recover_y_subscripts = 'eghj,jsxp,s->esghxp'
+    else:
+        assert False
+
+    def gram_qr_local(backend, a, gram_a_subscripts, q_subscripts):
+        gram_a = backend.einsum(gram_a_subscripts, a.conj(), a)
+        d1, d2, xi = gram_a.shape[:3]
+
+        # local
+        gram_a = gram_a.numpy().reshape(d1*d2*xi, d1*d2*xi)
+        w, v = la.eigh(gram_a, overwrite_a=True)
+        s = np.clip(w, 0, None) ** 0.5
+        s_pinv = np.divide(1, s, out=np.zeros_like(s), where=s!=0)
+        r = np.einsum('j,ij->ji', s, v.conj()).reshape(d1*d2*xi, d1, d2, xi)
+        r_inv = np.einsum('j,ij->ij', s_pinv, v).reshape(d1, d2, xi, d1*d2*xi)
+
+        r = backend.astensor(r)
+        r_inv = backend.astensor(r_inv)
+        q = backend.einsum(q_subscripts, a, r_inv)
+        return q, r
+
+    x, y = state.grid[x_pos], state.grid[y_pos]
+
+    xq, xr = gram_qr_local(state.backend, x, gram_x_subscripts, xq_subscripts)
+    yq, yr = gram_qr_local(state.backend, y, gram_y_subscripts, yq_subscripts)
+
+    u, s, v = state.backend.einsumsvd('ixpk,jyqk->isyq,jsxp', xr, yr, option=ReducedSVD(rank))
+    s = s ** 0.5
+    state.grid[x_pos] = state.backend.einsum(recover_x_subscripts, xq, u, s)
+    state.grid[y_pos] = state.backend.einsum(recover_y_subscripts, yq, v, s)
+
+
+def swap_local_pair_local_gram_qr_svd(state, x_pos, y_pos, rank):
+    if x_pos[0] < y_pos[0]: # [x y]^T
+        gram_x_subscripts = 'abcdxp,abCdXP->xpcXPC'
+        gram_y_subscripts = 'cfghyq,CfghYQ->yqcYQC'
+        xq_subscripts = 'abcdxp,xpci->abdi'
+        yq_subscripts = 'cfghyq,yqcj->fghj'
+        recover_x_subscripts = 'abcdxp,cxpsyq->absdyq'
+        recover_y_subscripts = 'cfghyq,cyqsxp->sfghxp'
+    elif x_pos[0] > y_pos[0]: # [y x]^T
+        gram_x_subscripts = 'abcdxp,AbcdXP->xpaXPA'
+        gram_y_subscripts = 'efahyq,efAhYQ->yqaYQA'
+        xq_subscripts = 'abcdxp,xpai->bcdi'
+        yq_subscripts = 'efahyq,yqaj->efhj'
+        recover_x_subscripts = 'abcdxp,axpsyq->sbcdyq'
+        recover_y_subscripts = 'efahyq,ayqsxp->efshxp'
+    elif x_pos[1] < y_pos[1]: # [x y]
+        gram_x_subscripts = 'abcdxp,aBcdXP->xpbXPB'
+        gram_y_subscripts = 'efgbyq,efgBYQ->yqbYQB'
+        xq_subscripts = 'abcdxp,xpbi->acdi'
+        yq_subscripts = 'efgbyq,yqbj->efgj'
+        recover_x_subscripts = 'abcdxp,bxpsyq->ascdyq'
+        recover_y_subscripts = 'efgbyq,byqsxp->efgsxp'
+    elif x_pos[1] > y_pos[1]: # [y x]
+        gram_x_subscripts = 'abcdxp,abcDXP->xpdXPD'
+        gram_y_subscripts = 'edghyq,eDghYQ->yqdYQD'
+        xq_subscripts = 'abcdxp,xpdi->abci'
+        yq_subscripts = 'edghyq,yqdj->eghj'
+        recover_x_subscripts = 'abcdxp,dxpsyq->abcsyq'
+        recover_y_subscripts = 'edghyq,dyqsxp->esghxp'
+    else:
+        assert False
+
+    numpy_backend = tensorbackends.get('numpy')
+
+    def gram_qr_local(backend, a, gram_a_subscripts, q_subscripts):
+        gram_a = backend.einsum(gram_a_subscripts, a.conj(), a)
+        d1, d2, xi = gram_a.shape[:3]
+
+        # local
+        gram_a = gram_a.numpy().reshape(d1*d2*xi, d1*d2*xi)
+        w, v = la.eigh(gram_a, overwrite_a=True)
+        s = np.clip(w, 0, None) ** 0.5
+        s_pinv = np.divide(1, s, out=np.zeros_like(s), where=s!=0)
+        r = np.einsum('j,ij->ji', s, v.conj()).reshape(d1*d2*xi, d1, d2, xi)
+        r_inv = np.einsum('j,ij->ij', s_pinv, v).reshape(d1, d2, xi, d1*d2*xi)
+        return numpy_backend.tensor(r), numpy_backend.tensor(r_inv)
+
+    x, y = state.grid[x_pos], state.grid[y_pos]
+
+    xr, xr_inv = gram_qr_local(state.backend, x, gram_x_subscripts, xq_subscripts)
+    yr, yr_inv = gram_qr_local(state.backend, y, gram_y_subscripts, yq_subscripts)
+
+    u, s, v = numpy_backend.einsumsvd('ixpk,jyqk->isyq,jsxp', xr, yr, option=ReducedSVD(rank))
+    s **= 0.5
+    u = numpy_backend.einsum('xpki,isyq,s->kxpsyq', xr_inv, u, s)
+    v = numpy_backend.einsum('yqkj,jsxp,s->kyqsxp', yr_inv, v, s)
 
     u = state.backend.astensor(u)
     v = state.backend.astensor(v)
