@@ -1,15 +1,15 @@
 from time import time
-import subprocess
+# import subprocess
 
 
-def benchmark_norm(p, contract_option, standard=1, path=None, verbosity=1, reps=1, profile=True):
+def benchmark_expectation(p, observable, contract_option, standard=1, path=None, verbosity=1, reps=1, profile=True):
     backend = p.backend
     is_ctf = backend.name in {'ctf', 'ctfview'}
     if profile:
         if is_ctf:
             import ctf
-            timer = ctf.timer_epoch(f'{contract_option}')
-            timer.begin()
+            timer_epoch = ctf.timer_epoch(str(contract_option)[:53])
+            timer_epoch.begin()
         else:
             import cProfile
             import pstats
@@ -22,7 +22,7 @@ def benchmark_norm(p, contract_option, standard=1, path=None, verbosity=1, reps=
     best = None
     for i in range(reps):
         loop_start = time()
-        result = p.norm(contract_option)
+        result = p.norm(contract_option) if observable is None else p.expectation(observable, contract_option)
         loop_duration = time() - loop_start
         if not best or best > loop_duration:
             best = loop_duration
@@ -30,7 +30,7 @@ def benchmark_norm(p, contract_option, standard=1, path=None, verbosity=1, reps=
     
     if profile:
         if is_ctf:
-            timer.end()
+            timer_epoch.end()
         else:
             pr.disable()
 
@@ -43,13 +43,13 @@ def benchmark_norm(p, contract_option, standard=1, path=None, verbosity=1, reps=
         'shape': p.shape,
         'dims': str(p.dims),
         'contract_option': str(contract_option),
-        'result': result,
+        'result': result.real,
         'time': duration / reps,
         'abs_err': abs_err,
         'rel_err': rel_err,
         'backend': backend.name,
         'nproc': backend.nproc,
-        'git_hash': subprocess.check_output(["git", "describe", "--always"]).strip().decode()
+        # 'git_hash': subprocess.check_output(["git", "describe", "--always"]).strip().decode()
     }
 
     if backend.rank == 0:
@@ -72,13 +72,20 @@ def benchmark_norm(p, contract_option, standard=1, path=None, verbosity=1, reps=
     return data
 
 
+def benchmark_norm(p, *args, **kwargs):
+    return benchmark_expectation(p, None, *args, **kwargs)
+
+
 def save_data(data, path):
     import json
-    with open(path, 'r') as fd:
-        try:
-            database = json.load(fd)
-        except json.decoder.JSONDecodeError:
-            database = []
+    try:
+        with open(path, 'r') as fd:
+            try:
+                database = json.load(fd)
+            except json.decoder.JSONDecodeError:
+                database = []
+    except FileNotFoundError:
+        database = []
     with open(path, 'w+') as fd:
         # database[str(contract_option)] = database.get(str(contract_option), []).append(data)
         database.append(data)
