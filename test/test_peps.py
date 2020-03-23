@@ -63,6 +63,53 @@ class TestPEPS(unittest.TestCase):
         self.assertTrue(np.isclose(qstate.amplitude([1,0,0,1,0,0], contract_option), 1/np.sqrt(2)))
         self.assertTrue(np.isclose(qstate.amplitude([1,1,0,1,1,0], contract_option), 1j/np.sqrt(2)))
 
+    def test_amplitude_local_gram_qr_update(self, backend):
+        qstate = peps.computational_zeros(2, 3, backend=backend)
+        qstate.apply_circuit([
+            Gate('X', [], [0]),
+            Gate('H', [], [1]),
+            Gate('CX', [], [0,3]),
+            Gate('CX', [], [1,4]),
+            Gate('S', [], [1]),
+        ], update_option=peps.LocalGramQRUpdate(rank=2))
+        contract_option = peps.BMPS(ReducedSVD(rank=2))
+        self.assertTrue(np.isclose(qstate.amplitude([1,0,0,1,0,0], contract_option), 1/np.sqrt(2)))
+        self.assertTrue(np.isclose(qstate.amplitude([1,1,0,1,1,0], contract_option), 1j/np.sqrt(2)))
+
+    def test_amplitude_local_gram_qr_svd_update(self, backend):
+        qstate = peps.computational_zeros(2, 3, backend=backend)
+        qstate.apply_circuit([
+            Gate('X', [], [0]),
+            Gate('H', [], [1]),
+            Gate('CX', [], [0,3]),
+            Gate('CX', [], [1,4]),
+            Gate('S', [], [1]),
+        ], update_option=peps.LocalGramQRSVDUpdate(rank=2))
+        contract_option = peps.BMPS(ReducedSVD(rank=2))
+        self.assertTrue(np.isclose(qstate.amplitude([1,0,0,1,0,0], contract_option), 1/np.sqrt(2)))
+        self.assertTrue(np.isclose(qstate.amplitude([1,1,0,1,1,0], contract_option), 1j/np.sqrt(2)))
+
+    def test_amplitude_nonlocal(self, backend):
+        update_options = [
+            None,
+            peps.DirectUpdate(ImplicitRandomizedSVD(rank=2)),
+            peps.QRUpdate(ReducedSVD(rank=2)),
+            peps.LocalGramQRUpdate(rank=2),
+            peps.LocalGramQRSVDUpdate(rank=2),
+        ]
+        for option in update_options:
+            with self.subTest(update_option=option):
+                qstate = peps.computational_zeros(2, 3, backend=backend)
+                qstate.apply_circuit([
+                    Gate('X', [], [0]),
+                    Gate('H', [], [1]),
+                    Gate('CX', [], [0,5]),
+                    Gate('CX', [], [1,3]),
+                    Gate('S', [], [1]),
+                ], update_option=option)
+                self.assertTrue(np.isclose(qstate.amplitude([1,0,0,0,0,1]), 1/np.sqrt(2)))
+                self.assertTrue(np.isclose(qstate.amplitude([1,1,0,1,0,1]), 1j/np.sqrt(2)))
+
     def test_probablity(self, backend):
         qstate = peps.computational_zeros(2, 3, backend=backend)
         qstate.apply_circuit([
@@ -159,7 +206,7 @@ class TestPEPS(unittest.TestCase):
         self.assertTrue(np.isclose(psi.inner(phi), 0.5))
 
     def test_contract_scalar(self, backend):
-        qstate = peps.random(3, 4, 2, backend)
+        qstate = peps.random(3, 4, 2, backend=backend)
         norm = qstate.norm(contract_option=Snake())
         for contract_option in contract_options:
             if contract_option is not Snake:
@@ -168,9 +215,17 @@ class TestPEPS(unittest.TestCase):
                         self.assertTrue(np.isclose(norm, qstate.norm(contract_option=contract_option(svd_option))))
 
     def test_contract_vector(self, backend):
-        qstate = peps.random(3, 3, 2, backend)
+        qstate = peps.random(3, 3, 2, backend=backend)
         statevector = qstate.statevector(contract_option=Snake())
         for contract_option in [BMPS(None), BMPS(ReducedSVD(16)), BMPS(RandomizedSVD(16)), BMPS(ImplicitRandomizedSVD(16))]:
             with self.subTest(contract_option=contract_option):
                 contract_result = qstate.statevector(contract_option=contract_option)
                 self.assertTrue(backend.allclose(statevector.tensor, contract_result.tensor))
+
+    def test_truncate(self, backend):
+        for phys, dual in [(1,1), (2,1), (2,2)]:
+            with self.subTest(phyiscal_dim=phys, dual_dim=dual):
+                qstate = peps.random(2, 3, 4, phys, dual, backend=backend)
+                self.assertEqual(qstate.get_average_bond_dim(), 4)
+                qstate.truncate(peps.DefaultUpdate(rank=2))
+                self.assertEqual(qstate.get_average_bond_dim(), 2)
