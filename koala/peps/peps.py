@@ -174,7 +174,7 @@ class PEPS(QuantumState):
         return np.abs(self.amplitude(indices, contract_option))**2
 
     def expectation(self, observable, use_cache=False, contract_option=None):
-        return braket(self, observable, self, use_cache=use_cache, contract_option=contract_option)
+        return braket(self, observable, self, use_cache=use_cache, contract_option=contract_option).real
 
     def contract(self, option=None):
         return contraction.contract(self, option)
