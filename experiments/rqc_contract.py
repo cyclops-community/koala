@@ -1,30 +1,35 @@
-from rqc import generate, build_cli_parser, run_peps
-from benchmark_contract import benchmark_norm, save_data
+from experiments.rqc import generate, build_cli_parser, run_peps
+from experiments.benchmark import Benchmark
 from koala import peps
 from koala.peps import contract_options, Snake, ABMPS, BMPS, Square, TRG
 from tensorbackends.interface import ReducedSVD, RandomizedSVD, ImplicitRandomizedSVD
 
 
-def update_save_data(data, args, rank):
-    data['nlayer'] = args.nlayer
-    data['seed'] = args.seed
-    if args.path and rank == 0:
-        save_data(data, args.path)
-    return data
-
 
 def run(args):
+    include = (Snake, BMPS, ABMPS, TRG, Square)
+    exclude = ()
     qstate = run_peps(generate(args.nrow, args.ncol, args.nlayer, args.seed), args.maxrank, args.backend)
-    standard = update_save_data(benchmark_norm(
-        qstate, contract_option=Snake(), standard=None, path=args.path, reps=1, profile=args.profile), args, qstate.backend.rank)
     maxrank = args.maxrank ** 2
-    for contract_option in contract_options:
-        if contract_option not in (Snake, ):
-            for svd_option in (ReducedSVD(maxrank), RandomizedSVD(maxrank), ImplicitRandomizedSVD(maxrank)):
-                update_save_data(benchmark_norm(qstate, 
-                    TRG(None, svd_option) if contract_option is TRG else contract_option(svd_option), 
-                    standard=standard['result'], path=args.path, reps=1, profile=args.profile), args, qstate.backend.rank)
+    standard = None
 
+    for contract_option in include:
+        if contract_option not in exclude:
+            if contract_option is Snake:
+                option = Snake()
+            else:
+                for svd_option in (ReducedSVD(maxrank), RandomizedSVD(maxrank), ImplicitRandomizedSVD(maxrank)):
+                    option = TRG(None, svd_option) if contract_option is TRG else contract_option(svd_option)
+            
+            bm = Benchmark(str(option), qstate.backend, standard=standard, path=args.path, 
+                reps=1, profile=args.profile, additional_info={'nlayer': args.nlayer, 'seed': args.seed})
+            bm.add_PEPS_info(qstate)
+            bm.add_contract_info(option)
+            with bm:
+                bm.result = qstate.norm(contract_option=option)
+            
+            if contract_option is Snake and not standard:
+                standard = bm.result
 
 
 if __name__ == '__main__':

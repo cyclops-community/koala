@@ -53,7 +53,7 @@ def run_statevector(circuit, backend):
 
 def run_peps(circuit, maxrank, backend):
     qstate = koala.peps.computational_zeros(circuit.nrow, circuit.ncol, backend=backend)
-    qstate.apply_circuit(circuit.gates, update_option=peps.DefaultUpdate(maxrank))
+    qstate.apply_circuit(circuit.gates, update_option=koala.peps.DefaultUpdate(maxrank))
     return qstate
 
 
