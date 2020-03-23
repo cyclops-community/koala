@@ -55,6 +55,9 @@ class PEPS(QuantumState):
     def get_max_bond_dim(self):
         return max(chain.from_iterable(site.shape[0:4] for _, site in np.ndenumerate(self.grid)))
 
+    def truncate(self, update_option=None):
+        update.truncate(self, update_option)
+
     def __getitem__(self, position):
         item = self.grid[position]
         if isinstance(item, np.ndarray):
@@ -93,6 +96,8 @@ class PEPS(QuantumState):
             update.apply_single_site_operator(self, operator, positions[0])
         elif len(positions) == 2 and is_two_local(*positions):
             update.apply_local_pair_operator(self, operator, positions, update_option)
+        elif len(positions) == 2:
+            update.apply_nonlocal_pair_operator(self, operator, positions, update_option)
         else:
             raise ValueError('nonlocal operator is not supported')
 
@@ -169,7 +174,7 @@ class PEPS(QuantumState):
         return np.abs(self.amplitude(indices, contract_option))**2
 
     def expectation(self, observable, use_cache=False, contract_option=None):
-        return braket(self, observable, self, use_cache=use_cache, contract_option=contract_option)
+        return braket(self, observable, self, use_cache=use_cache, contract_option=contract_option).real
 
     def contract(self, option=None):
         return contraction.contract(self, option)

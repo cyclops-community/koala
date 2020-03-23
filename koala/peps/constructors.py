@@ -30,7 +30,7 @@ def computational_basis(nrow, ncol, bits, backend='numpy'):
     return PEPS(grid, backend)
 
 
-def random(nrow, ncol, rank, backend='numpy'):
+def random(nrow, ncol, rank, physical_dim=2, dual_dim=1, backend='numpy'):
     backend = tensorbackends.get(backend)
     grid = np.empty((nrow, ncol), dtype=object)
     for i, j in np.ndindex(nrow, ncol):
@@ -39,7 +39,7 @@ def random(nrow, ncol, rank, backend='numpy'):
             rank if j < ncol - 1 else 1,
             rank if i < nrow - 1 else 1,
             rank if j > 0 else 1,
-            2, 1,
+            physical_dim, dual_dim,
         )
         grid[i, j] = backend.random.uniform(-1,1,shape) + 1j * backend.random.uniform(-1,1,shape)
     return PEPS(grid, backend)
