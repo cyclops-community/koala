@@ -71,7 +71,7 @@ def run_peps(ri, steps, normfreq, backend, threshold, maxrank, randomized_svd):
     qstate = peps.computational_zeros(ri.nrows, ri.ncols, backend=backend)
     for i in range(steps):
         for operator, sites in ri.trotter_steps():
-            qstate.apply_operator(operator, sites, threshold=threshold, maxrank=maxrank, randomized_svd=randomized_svd)
+            qstate.apply_operator(operator, sites, update_option=peps.DefaultUpdate(maxrank))
         if i % normfreq == 0:
             qstate.site_normalize()
     qstate /= qstate.norm()

@@ -49,7 +49,7 @@ def run_peps(tfi, steps, normfreq, backend, maxrank):
     qstate = peps.random(tfi.nrows, tfi.ncols, maxrank, backend=backend)
     for i in range(steps):
         for operator, sites in tfi.trotter_steps():
-            qstate.apply_operator(operator, sites, svd_option=ImplicitRandomizedSVD(rank=maxrank))
+            qstate.apply_operator(operator, sites, update_option=peps.DefaultUpdate(maxrank))
         if i % normfreq == 0:
             qstate.site_normalize()
     return qstate
