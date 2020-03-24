@@ -8,6 +8,7 @@ from tensorbackends.interface import ReducedSVD, ImplicitRandomizedSVD
 
 from . import sites
 from .utils import svd_splitter
+from .update import QRUpdate
 
 
 class ContractOption:
@@ -229,6 +230,47 @@ def contract_squares(state, svd_option=None):
         return new_tn[0,0].item() if new_tn[0,0].size == 1 else new_tn[0,0]
     # alternate the neighboring relationship and contract recursively
     return contract_squares(PEPS(new_tn, state.backend).rotate(), svd_option)
+
+def contract_squares_variant(state, svd_option=None):
+    """
+    Contract the PEPS by contracting two neighboring tensors to one recursively.
+    The neighboring relationship alternates from horizontal and vertical.
+
+    Parameters
+    ----------
+    svd_option: tensorbackends.interface.Option, optional
+        Parameters for SVD truncations. Will perform SVD if given.
+
+    Returns
+    -------
+    output: state.backend.tensor or scalar
+        The contraction result.
+    """
+    from .peps import PEPS
+    state.truncate(QRUpdate(svd_option))
+    tn = state.grid
+    new_tn = np.empty(((state.nrow + 1) // 2, (state.ncol + 1) // 2), dtype=object)
+    nrow, ncol = new_tn.shape
+    if state.nrow % 2 == 1:
+        nrow -= 1
+        if state.ncol % 2 == 1:
+            ncol -= 1
+            new_tn[-1,-1] = tn[-1,-1].copy()
+        for j in range(ncol):
+            new_tn[-1,j] = sites.contract_y(tn[-1,2*j], tn[-1,2*j+1])
+    if state.ncol % 2 == 1:
+        for i in range(nrow):
+            new_tn[i,-1] = sites.contract_x(tn[2*i,-1], tn[2*i+1,-1])
+
+    for i, j in np.ndindex(nrow, ncol):
+        new_tn[i,j] = state.backend.einsum('aijdpP,AbkiqQ,jlcDrR,kBClsS->(aA)(bB)(cC)(dD)(pqrs)(PQRS)', 
+            tn[2*i,2*j], tn[2*i,2*j+1], tn[2*i+1,2*j], tn[2*i+1,2*j+1])
+
+    # base case
+    if new_tn.shape == (1, 1):
+        return new_tn[0,0].item() if new_tn[0,0].size == 1 else new_tn[0,0]
+    # alternate the neighboring relationship and contract recursively
+    return contract_squares_variant(PEPS(new_tn, state.backend), svd_option)
 
 
 def contract_to_MPS(state, horizontal=False, mps_mult_mpo=None, svd_option=None):
