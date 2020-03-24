@@ -25,7 +25,7 @@ def run(args):
     
     for option in options:
         bm = Benchmark(str(option), qstate.backend, standard=standard, path=args.path, 
-            reps=1, profile_time=args.profile, additional_info={
+            reps=1, profile_time=args.profile_time, profile_memory=args.profile_memory, additional_info={
                 'coupling': args.coupling,
                 'field': args.field,
                 'tau': args.tau,
@@ -44,8 +44,10 @@ def run(args):
 
 if __name__ == '__main__':
     parser = build_cli_parser()
-    parser.add_argument('-p', '--path', help='path to save the datafile', type=str, default=None)
-    parser.add_argument('--prof', '--profile', dest='profile', action='store_const', const='True', 
-        default=False, help='enable profiling')
+    parser.add_argument('-p', '--path', help='path to save the data file', type=str, default=None)
+    parser.add_argument('-pt', '--profile-time', dest='profile_time', action='store_const', const='True', 
+        default=False, help='enable profiling time')
+    parser.add_argument('-pm', '--profile-memory', dest='profile_memory', action='store_const', const='True', 
+        default=False, help='enable profiling memory')
 
     run(parser.parse_args())
