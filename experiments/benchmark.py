@@ -3,14 +3,15 @@ import tensorbackends
 
 
 class Benchmark:
-    def __init__(self, name, backend, standard=None, path=None, printout=True, reps=1, profile=True, additional_info={}):
+    def __init__(self, name, backend, standard=None, path=None, printout=True, reps=1, profile_time=True, profile_memory=True, additional_info={}):
         self.name = name
         self.backend = tensorbackends.get(backend)
         self.standard = standard
         self.path = path
         self.printout = printout
         self.reps = reps
-        self.profile = profile
+        self.profile_time = profile_time
+        self.profile_memory = profile_memory
         self.data = {}
         self.update_data({
             'backend': backend.name,
@@ -20,9 +21,14 @@ class Benchmark:
         self.result = None
 
     def __enter__(self):
-        if self.profile:
+        if self.profile_memory:
+            import tracemalloc
+            tracemalloc.start()
+
+        if self.profile_time:
             if self.backend.name in ('ctf', 'ctfview'):
                 import ctf
+                ctf.initialize_flops_counter()
                 self.timer_epoch = ctf.timer_epoch(self.name[:51])
                 self.timer_epoch.begin()
             else:
@@ -33,12 +39,20 @@ class Benchmark:
 
     def __exit__(self, type, value, traceback):
         duration = time() - self.start_time
-        if self.profile:
+        if self.profile_time:
             if self.backend.name in ('ctf', 'ctfview'):
+                import ctf
                 self.timer_epoch.end()
+                self.update_data('flops', ctf.get_estimated_flops())
             else:
                 self.pr.disable()
         self.update_data('time', duration / self.reps)
+
+        if self.profile_memory:
+            import tracemalloc
+            _, peak_memory = tracemalloc.get_traced_memory()
+            tracemalloc.stop()
+            self.update_data('peak_memory', peak_memory)
 
         if self.result:
             self.update_data('result', self.result.real)
@@ -56,14 +70,14 @@ class Benchmark:
         except:
             pass
 
-        if all((self.backend.rank == 0, self.printout, self.profile, self.backend.name not in ('ctf', 'ctfview'))):
+        if all((self.backend.rank == 0, self.printout, self.profile_time, self.backend.name not in ('ctf', 'ctfview'))):
             import pstats
             from io import StringIO
             s = StringIO()
             ps = pstats.Stats(self.pr, stream=s)
             ps.sort_stats('cumtime').print_stats(15)
             ps.sort_stats('tottime').print_stats(15)
-            print(s.getvalue())
+            print(s.getvalue(), flush=True)
 
         self.save_data()
 
@@ -84,7 +98,7 @@ class Benchmark:
             data = {data: value}
         if self.printout and self.backend.rank == 0:
             for k, v in data.items():
-                print(f'{k}: {v}')
+                print(f'{k}: {v}', flush=True)
         self.data.update(data)
         return self.data
 

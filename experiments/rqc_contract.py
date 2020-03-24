@@ -13,23 +13,25 @@ def run(args):
     maxrank = args.maxrank ** 2
     standard = None
 
+    options = []
     for contract_option in include:
         if contract_option not in exclude:
             if contract_option is Snake:
-                option = Snake()
+                options.append(Snake())
             else:
                 for svd_option in (ReducedSVD(maxrank), RandomizedSVD(maxrank), ImplicitRandomizedSVD(maxrank)):
-                    option = TRG(None, svd_option) if contract_option is TRG else contract_option(svd_option)
-            
-            bm = Benchmark(str(option), qstate.backend, standard=standard, path=args.path, 
-                reps=1, profile=args.profile, additional_info={'nlayer': args.nlayer, 'seed': args.seed})
-            bm.add_PEPS_info(qstate)
-            bm.add_contract_info(option)
-            with bm:
-                bm.result = qstate.norm(contract_option=option)
-            
-            if contract_option is Snake and not standard:
-                standard = bm.result
+                    options.append(TRG(None, svd_option) if contract_option is TRG else contract_option(svd_option))
+    
+    for option in options:
+        bm = Benchmark(str(option), qstate.backend, standard=standard, path=args.path, 
+            reps=1, profile_time=args.profile, additional_info={'nlayer': args.nlayer, 'seed': args.seed})
+        bm.add_PEPS_info(qstate)
+        bm.add_contract_info(option)
+        with bm:
+            bm.result = qstate.norm(contract_option=option)
+        
+        if isinstance(option, Snake) and not standard:
+            standard = bm.result
 
 
 if __name__ == '__main__':

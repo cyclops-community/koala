@@ -14,29 +14,31 @@ def run(args):
     maxrank = args.maxrank # ** 2
     standard = None
 
+    options = []
     for contract_option in include:
         if contract_option not in exclude:
             if contract_option is Snake:
-                option = Snake()
+                options.append(Snake())
             else:
                 for svd_option in (ReducedSVD(maxrank), RandomizedSVD(maxrank), ImplicitRandomizedSVD(maxrank)):
-                    option = TRG(svd_option, svd_option) if contract_option is TRG else contract_option(svd_option)
+                    options.append(TRG(svd_option, svd_option) if contract_option is TRG else contract_option(svd_option))
+    
+    for option in options:
+        bm = Benchmark(str(option), qstate.backend, standard=standard, path=args.path, 
+            reps=1, profile_time=args.profile, additional_info={
+                'coupling': args.coupling,
+                'field': args.field,
+                'tau': args.tau,
+                'steps': args.steps,
+                'normfreq': args.normfreq,
+            })
+        bm.add_PEPS_info(qstate)
+        bm.add_contract_info(option)
+        with bm:
+            bm.result = qstate.expectation(tfi.observable, contract_option=option)
             
-            bm = Benchmark(str(option), qstate.backend, standard=standard, path=args.path, 
-                reps=1, profile=args.profile, additional_info={
-                    'coupling': args.coupling,
-                    'field': args.field,
-                    'tau': args.tau,
-                    'steps': args.steps,
-                    'normfreq': args.normfreq,
-                })
-            bm.add_PEPS_info(qstate)
-            bm.add_contract_info(option)
-            with bm:
-                bm.result = qstate.expectation(tfi.observable, contract_option=option)
-            
-            if contract_option is Snake and not standard:
-                standard = bm.result
+        if isinstance(option, Snake) and not standard:
+            standard = bm.result
 
 
 
