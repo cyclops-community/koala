@@ -87,6 +87,15 @@ def contract(state, option):
         raise ValueError(f'unknown contraction option: {option}')
 
 
+def contract_sandwich(state1, state2, option):
+    if option is None:
+        option = SingleLayer(None)
+    if isinstance(option, SingleLayer):
+        return contract_single_layer(state1, state2, svd_option=option.svd_option)
+    else:
+        return contract(state1.apply(state2), option=option)
+
+
 def contract_ABMPS(state, mps_mult_mpo=None, svd_option=None):
     """
     Contract the PEPS by performing alternating vertical and horizontal bondary contractions.
