@@ -1,13 +1,14 @@
 from heisenberg import Heisenberg2D
 from experiments.benchmark import Benchmark
 from koala import Observable, statevector, peps
-from koala.peps import contract_options, Snake, ABMPS, BMPS, Square, TRG
+from koala.peps import contract_options, Snake, ABMPS, BMPS, Square, TRG, SingleLayer
 from tensorbackends.interface import ReducedSVD, RandomizedSVD, ImplicitRandomizedSVD
 import argparse
 
 
 def run(args):
     maxrank = args.maxrank
+    # model = Heisenberg2D(args.nrow, args.ncol, Jz=[1.0, 0.5], hx=0.2) # rank=5
     model = Heisenberg2D(
         args.nrow, args.ncol,
         Jx=[-1.0, -1.0],
@@ -17,7 +18,8 @@ def run(args):
     )
 
     # ground states
-    print('exact', model.ground_state_energy()/model.nsite)
+    # exact_energy = model.ground_state_energy()/model.nsite
+    # print('exact', exact_energy)
 
 
     # ITE
@@ -31,20 +33,22 @@ def run(args):
         for operator, sites in trotter_step:
             qstate.apply_operator(operator, sites)
         qstate /= qstate.norm()
-    print('statevector', qstate.expectation(hamiltonian)/model.nsite)
+    statevector_energy = qstate.expectation(hamiltonian)/model.nsite
+    print('statevector', statevector_energy)
 
     ## peps
     update_option = peps.DefaultUpdate(rank=maxrank)
     qstate = peps.computational_zeros(model.nrow, model.ncol, backend=args.backend)
-    for i in range(nstep):
-        for operator, sites in trotter_step:
-            qstate.apply_operator(operator, sites, update_option=update_option)
-        qstate.site_normalize()
+    with Benchmark('apply', backend=qstate.backend, standard=statevector_energy, path=args.path):
+        for i in range(nstep):
+            for operator, sites in trotter_step:
+                qstate.apply_operator(operator, sites, update_option=update_option)
+            qstate.site_normalize()
 
-    include = (Snake, BMPS, ABMPS, TRG, Square)
+    include = (Snake, TRG, BMPS, )
     exclude = ()
-    standard = None
-    maxrank = maxrank ** 2
+    standard = statevector_energy
+    maxrank = maxrank #** 2
 
     options = []
     for contract_option in include:
@@ -52,8 +56,8 @@ def run(args):
             if contract_option is Snake:
                 options.append(Snake())
             else:
-                for svd_option in (ReducedSVD(maxrank), RandomizedSVD(maxrank), ImplicitRandomizedSVD(maxrank)):
-                    options.append(TRG(svd_option, svd_option) if contract_option is TRG else contract_option(svd_option))
+                for svd_option in (RandomizedSVD(maxrank), ImplicitRandomizedSVD(maxrank), ReducedSVD(maxrank)):
+                    options.append(TRG(None, svd_option) if contract_option is TRG else contract_option(svd_option))
     
     for option in options:
         bm = Benchmark(str(option), qstate.backend, standard=standard, path=args.path, 
