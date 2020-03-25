@@ -213,7 +213,7 @@ def contract_single_layer(state1, state2, svd_option=None):
                     if j == len(mps)-1:
                         mps[-1] = s.backend.einsum('AybBcCzqQ->A(ybB)cCzqQ', mps[-1])
             else:
-                pass
+                mps[j] = s.backend.einsum('xyijzpP,ibcdqk,jBCDkQ->x(ybB)cC(zdD)(pq)(PQ)', s, o1, o2)
 
     # contract the last MPS to a single tensor
     for i, tsr in enumerate(mps):
@@ -460,11 +460,9 @@ def _contract_TRG(state, tn, svd_option=None):
 
 
 def _mps_mult_mpo(mps, mpo, svd_option=None):
-    # if mpo[0].shape[2] == 1:
-    #     svd_option = None
     new_mps = np.empty_like(mps)
     for i, (s, o) in enumerate(zip(mps, mpo)):
-        if isinstance(svd_option, ImplicitRandomizedSVD):
+        if svd_option:
             if i == 0:
                 new_mps[0] = s.backend.einsum('abidpq,iBcDPQ->abBc(dD)(pP)(qQ)', s, o)
             else:
@@ -474,8 +472,8 @@ def _mps_mult_mpo(mps, mpo, svd_option=None):
                     new_mps[-1] = s.backend.einsum('abBcdpq->a(bB)cdpq', new_mps[-1])
         else:
             new_mps[i] = sites.contract_x(s, o)
-            if svd_option is not None and i > 0:
-                new_mps[i-1], new_mps[i] = sites.reduce_y(new_mps[i-1], new_mps[i], svd_option)
+            # if svd_option is not None and i > 0:
+            #     new_mps[i-1], new_mps[i] = sites.reduce_y(new_mps[i-1], new_mps[i], svd_option)
     return new_mps
 
 
