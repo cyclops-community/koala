@@ -88,6 +88,10 @@ def contract(state, option):
 
 
 def contract_sandwich(state1, state2, option):
+    if state1.backend != state2.backend:
+        raise ValueError('cannot contract two states with different backends')
+    if state1.shape != state2.shape:
+        raise ValueError('cannot contract two states with different shapes')
     if option is None:
         option = SingleLayer(None)
     if isinstance(option, SingleLayer):
@@ -195,9 +199,6 @@ def contract_single_layer(state1, state2, svd_option=None):
 
     Parameters
     ----------
-    mps_mult_mpo: method or None, optional
-        The method used to apply an MPS to another MPS/MPO.
-
     svd_option: tensorbackends.interface.Option, optional
         Parameters for SVD truncations. Will perform SVD if given.
 
@@ -206,7 +207,6 @@ def contract_single_layer(state1, state2, svd_option=None):
     output: state.backend.tensor or scalar
         The contraction result.
     """
-    from .peps import PEPS
     # contract boundary MPS down
     mps = np.empty_like(state1.grid[0])
     for i, (tsr1, tsr2) in enumerate(zip(state1.grid[0], state2.grid[0])):
