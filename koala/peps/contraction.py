@@ -144,7 +144,7 @@ def contract_BMPS(state, mps_mult_mpo=None, svd_option=None):
         The contraction result.
     """
     # contract boundary MPS down
-    mps = contract_to_MPS(state, False, mps_mult_mpo, svd_option).grid.reshape(-1)
+    mps = contract_to_MPS(state, horizontal=False, reverse=False, mps_mult_mpo=mps_mult_mpo, svd_option=svd_option).grid.reshape(-1)
     # contract the last MPS to a single tensor
     result = mps[0]
     for tsr in mps[1:]:
@@ -336,7 +336,7 @@ def contract_squares_variant(state, svd_option=None):
     return contract_squares_variant(PEPS(new_tn, state.backend), svd_option)
 
 
-def contract_to_MPS(state, horizontal=False, mps_mult_mpo=None, svd_option=None):
+def contract_to_MPS(state, horizontal=False, reverse=False, mps_mult_mpo=None, svd_option=None):
     """
     Contract the PEPS to an MPS.
 
@@ -357,13 +357,13 @@ def contract_to_MPS(state, horizontal=False, mps_mult_mpo=None, svd_option=None)
     from .peps import PEPS
     if mps_mult_mpo is None:
         mps_mult_mpo = _mps_mult_mpo
-    if horizontal:
-        state = state.rotate(-1)
+    num_rotate90 = bool(horizontal) * 1 + bool(reverse) * 2
+    state = state.rotate(-num_rotate90)
     mps = state.grid[0]
     for i, mpo in enumerate(state.grid[1:]):
         mps = mps_mult_mpo(mps, mpo, svd_option)
-    mps = PEPS(mps.reshape(1, -1), state.backend)
-    return mps.rotate() if horizontal else mps
+    result = PEPS(mps.reshape(1, -1), state.backend).rotate(num_rotate90)
+    return result
 
 
 def contract_TRG(state, svd_option_1st=None, svd_option_rem=None):
@@ -489,15 +489,15 @@ def _mps_mult_mpo(mps, mpo, svd_option=None):
 def create_env_cache(state1, state2, bmps_option):
     assert state1.shape == state2.shape
     peps_obj = state1.dagger().apply(state2)
-    _up, _down = {}, {}
-    for i in range(peps_obj.shape[0]):
-        _up[i] = contract_to_MPS(peps_obj[:i], svd_option=bmps_option.svd_option) if i != 0 else None
-        _down[i] = contract_to_MPS(peps_obj[i+1:], svd_option=bmps_option.svd_option) if i != state1.nrow - 1 else None
-    return _up, _down
+    upper_mps_list = _contract_to_MPS_cache(peps_obj[:state1.nrow], svd_option=bmps_option.svd_option)
+    lower_mps_list = _contract_to_MPS_cache(peps_obj[1:], reverse=True, svd_option=bmps_option.svd_option)
+    upper = {i: mps for i, mps in enumerate(upper_mps_list, 1)}
+    lower = {i: mps for i, mps in enumerate(lower_mps_list)}
+    return upper, lower
 
 
 def inner_with_env(state, env, up_idx, down_idx, bmps_option):
-    up, down = env[0][up_idx], env[1][down_idx]
+    up, down = env[0].get(up_idx), env[1].get(down_idx)
     if up is None and down is None:
         peps_obj = state
     elif up is None:
@@ -507,3 +507,14 @@ def inner_with_env(state, env, up_idx, down_idx, bmps_option):
     else:
         peps_obj = up.concatenate(state).concatenate(down)
     return peps_obj.contract(bmps_option)
+
+
+def _contract_to_MPS_cache(state, horizontal=False, reverse=False, svd_option=None):
+    from .peps import PEPS
+    num_rotate90 = bool(horizontal) * 1 + bool(reverse) * 2
+    state = state.rotate(-num_rotate90)
+    mps_list = [state.grid[0]]
+    for mpo in state.grid[1:]:
+        mps_list.append(_mps_mult_mpo(mps_list[-1], mpo, svd_option))
+    mps_list = [PEPS(mps.reshape(1, -1), state.backend).rotate(num_rotate90) for mps in mps_list]
+    return [*reversed(mps_list)] if reverse else mps_list
