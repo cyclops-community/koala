@@ -33,6 +33,10 @@ class BMPS(ContractOption):
     def __init__(self, svd_option=None):
         self.svd_option = svd_option
 
+class SingleLayer(ContractOption):
+    def __init__(self, svd_option=None):
+        self.svd_option = svd_option
+
 class Snake(ContractOption):
     pass
 
@@ -73,12 +77,27 @@ def contract(state, option):
         return contract_ABMPS(state, svd_option=option.svd_option)
     elif isinstance(option, BMPS):
         return contract_BMPS(state, svd_option=option.svd_option)
+    elif isinstance(option, SingleLayer):
+        return contract_single_layer(*state, svd_option=option.svd_option)
     elif isinstance(option, Square):
         return contract_squares(state, svd_option=option.svd_option)
     elif isinstance(option, TRG):
         return contract_TRG(state, svd_option_1st=option.svd_option_1st, svd_option_rem=option.svd_option_rem)
     else:
         raise ValueError(f'unknown contraction option: {option}')
+
+
+def contract_sandwich(state1, state2, option):
+    if state1.backend != state2.backend:
+        raise ValueError('cannot contract two states with different backends')
+    if state1.shape != state2.shape:
+        raise ValueError('cannot contract two states with different shapes')
+    if option is None:
+        option = SingleLayer(None)
+    if isinstance(option, SingleLayer):
+        return contract_single_layer(state1, state2, svd_option=option.svd_option)
+    else:
+        return contract(state1.apply(state2), option=option)
 
 
 def contract_ABMPS(state, mps_mult_mpo=None, svd_option=None):
@@ -125,7 +144,7 @@ def contract_BMPS(state, mps_mult_mpo=None, svd_option=None):
         The contraction result.
     """
     # contract boundary MPS down
-    mps = contract_to_MPS(state, False, mps_mult_mpo, svd_option).grid.reshape(-1)
+    mps = contract_to_MPS(state, horizontal=False, reverse=False, mps_mult_mpo=mps_mult_mpo, svd_option=svd_option).grid.reshape(-1)
     # contract the last MPS to a single tensor
     result = mps[0]
     for tsr in mps[1:]:
@@ -172,6 +191,48 @@ def contract_env(state, row_range, col_range, svd_option=None):
     if col_range[1] < mid_peps.shape[1]:
         env_peps = env_peps.concatenate(mid_peps[:,col_range[1]:].contract_to_MPS(horizontal=True, svd_option=svd_option), axis=1)
     return env_peps
+    
+    
+def contract_single_layer(state1, state2, svd_option=None):
+    """
+    Contract the PEPS by contracting each MPS layer.
+
+    Parameters
+    ----------
+    svd_option: tensorbackends.interface.Option, optional
+        Parameters for SVD truncations. Will perform SVD if given.
+
+    Returns
+    -------
+    output: state.backend.tensor or scalar
+        The contraction result.
+    """
+    # contract boundary MPS down
+    mps = np.empty_like(state1.grid[0])
+    for i, (tsr1, tsr2) in enumerate(zip(state1.grid[0], state2.grid[0])):
+        mps[i] = state1.backend.einsum('abcdpi,ABCDiq->(aA)(bB)cC(dD)pq', tsr1, tsr2)
+    for i, (mpo1, mpo2) in enumerate(zip(state1.grid[1:], state2.grid[1:])):
+        for j, (s, o1, o2) in enumerate(zip(mps, mpo1, mpo2)):
+            if svd_option:
+                if j == 0:
+                    mps[0] = s.backend.einsum('xyijzpP,ibcdqk,jBCDkQ->xybBcC(zdD)(pq)(PQ)', s, o1, o2)
+                else:
+                    mps[j-1], mps[j] = svd_splitter('azxXdpP,AybBcCzqQ', *s.backend.einsumsvd(
+                        'aijkxXdpP,AylmiqQ,lbcjrn,mBCknR->azxXdpP,AybBcCz(qr)(QR)', mps[j-1], s, o1, o2, option=svd_option))
+                    if j == len(mps)-1:
+                        mps[-1] = s.backend.einsum('AybBcCzqQ->A(ybB)cCzqQ', mps[-1])
+            else:
+                mps[j] = s.backend.einsum('xyijzpP,ibcdqk,jBCDkQ->x(ybB)cC(zdD)(pq)(PQ)', s, o1, o2)
+
+    # contract the last MPS to a single tensor
+    for i, tsr in enumerate(mps):
+        mps[i] = state1.backend.einsum('abcCdpP->ab(cC)dpP', tsr)
+    result = mps[0]
+    for tsr in mps[1:]:
+        result = sites.contract_y(result, tsr)
+    return result.item() if result.size == 1 else result.reshape(
+        *[int(round(result.size ** (1 / state1.grid.size)))] * state1.grid.size
+        ).transpose(*[i + j * state1.nrow for i, j in np.ndindex(*state1.shape)])
 
 
 def contract_snake(state):
@@ -231,7 +292,51 @@ def contract_squares(state, svd_option=None):
     return contract_squares(PEPS(new_tn, state.backend).rotate(), svd_option)
 
 
-def contract_to_MPS(state, horizontal=False, mps_mult_mpo=None, svd_option=None):
+def contract_squares_variant(state, svd_option=None):
+    """
+    Contract the PEPS by contracting two neighboring tensors to one recursively.
+    The neighboring relationship alternates from horizontal and vertical.
+
+    Parameters
+    ----------
+    svd_option: tensorbackends.interface.Option, optional
+        Parameters for SVD truncations. Will perform SVD if given.
+
+    Returns
+    -------
+    output: state.backend.tensor or scalar
+        The contraction result.
+    """
+    from .peps import PEPS
+    from .update import QRUpdate
+    
+    state.truncate(QRUpdate(svd_option))
+    tn = state.grid
+    new_tn = np.empty(((state.nrow + 1) // 2, (state.ncol + 1) // 2), dtype=object)
+    nrow, ncol = new_tn.shape
+    if state.nrow % 2 == 1:
+        nrow -= 1
+        if state.ncol % 2 == 1:
+            ncol -= 1
+            new_tn[-1,-1] = tn[-1,-1].copy()
+        for j in range(ncol):
+            new_tn[-1,j] = sites.contract_y(tn[-1,2*j], tn[-1,2*j+1])
+    if state.ncol % 2 == 1:
+        for i in range(nrow):
+            new_tn[i,-1] = sites.contract_x(tn[2*i,-1], tn[2*i+1,-1])
+
+    for i, j in np.ndindex(nrow, ncol):
+        new_tn[i,j] = state.backend.einsum('aijdpP,AbkiqQ,jlcDrR,kBClsS->(aA)(bB)(cC)(dD)(pqrs)(PQRS)', 
+            tn[2*i,2*j], tn[2*i,2*j+1], tn[2*i+1,2*j], tn[2*i+1,2*j+1])
+
+    # base case
+    if new_tn.shape == (1, 1):
+        return new_tn[0,0].item() if new_tn[0,0].size == 1 else new_tn[0,0]
+    # alternate the neighboring relationship and contract recursively
+    return contract_squares_variant(PEPS(new_tn, state.backend), svd_option)
+
+
+def contract_to_MPS(state, horizontal=False, reverse=False, mps_mult_mpo=None, svd_option=None):
     """
     Contract the PEPS to an MPS.
 
@@ -252,13 +357,13 @@ def contract_to_MPS(state, horizontal=False, mps_mult_mpo=None, svd_option=None)
     from .peps import PEPS
     if mps_mult_mpo is None:
         mps_mult_mpo = _mps_mult_mpo
-    if horizontal:
-        state = state.rotate(-1)
+    num_rotate90 = bool(horizontal) * 1 + bool(reverse) * 2
+    state = state.rotate(-num_rotate90)
     mps = state.grid[0]
     for i, mpo in enumerate(state.grid[1:]):
         mps = mps_mult_mpo(mps, mpo, svd_option)
-    mps = PEPS(mps.reshape(1, -1), state.backend)
-    return mps.rotate() if horizontal else mps
+    result = PEPS(mps.reshape(1, -1), state.backend).rotate(num_rotate90)
+    return result
 
 
 def contract_TRG(state, svd_option_1st=None, svd_option_rem=None):
@@ -364,11 +469,9 @@ def _contract_TRG(state, tn, svd_option=None):
 
 
 def _mps_mult_mpo(mps, mpo, svd_option=None):
-    # if mpo[0].shape[2] == 1:
-    #     svd_option = None
     new_mps = np.empty_like(mps)
     for i, (s, o) in enumerate(zip(mps, mpo)):
-        if isinstance(svd_option, ImplicitRandomizedSVD):
+        if svd_option:
             if i == 0:
                 new_mps[0] = s.backend.einsum('abidpq,iBcDPQ->abBc(dD)(pP)(qQ)', s, o)
             else:
@@ -378,23 +481,23 @@ def _mps_mult_mpo(mps, mpo, svd_option=None):
                     new_mps[-1] = s.backend.einsum('abBcdpq->a(bB)cdpq', new_mps[-1])
         else:
             new_mps[i] = sites.contract_x(s, o)
-            if svd_option is not None and i > 0:
-                new_mps[i-1], new_mps[i] = sites.reduce_y(new_mps[i-1], new_mps[i], svd_option)
+            # if svd_option is not None and i > 0:
+            #     new_mps[i-1], new_mps[i] = sites.reduce_y(new_mps[i-1], new_mps[i], svd_option)
     return new_mps
 
 
 def create_env_cache(state1, state2, bmps_option):
     assert state1.shape == state2.shape
     peps_obj = state1.dagger().apply(state2)
-    _up, _down = {}, {}
-    for i in range(peps_obj.shape[0]):
-        _up[i] = contract_to_MPS(peps_obj[:i], svd_option=bmps_option.svd_option) if i != 0 else None
-        _down[i] = contract_to_MPS(peps_obj[i+1:], svd_option=bmps_option.svd_option) if i != state1.nrow - 1 else None
-    return _up, _down
+    upper_mps_list = _contract_to_MPS_cache(peps_obj[:state1.nrow], svd_option=bmps_option.svd_option)
+    lower_mps_list = _contract_to_MPS_cache(peps_obj[1:], reverse=True, svd_option=bmps_option.svd_option)
+    upper = {i: mps for i, mps in enumerate(upper_mps_list, 1)}
+    lower = {i: mps for i, mps in enumerate(lower_mps_list)}
+    return upper, lower
 
 
 def inner_with_env(state, env, up_idx, down_idx, bmps_option):
-    up, down = env[0][up_idx], env[1][down_idx]
+    up, down = env[0].get(up_idx), env[1].get(down_idx)
     if up is None and down is None:
         peps_obj = state
     elif up is None:
@@ -404,3 +507,14 @@ def inner_with_env(state, env, up_idx, down_idx, bmps_option):
     else:
         peps_obj = up.concatenate(state).concatenate(down)
     return peps_obj.contract(bmps_option)
+
+
+def _contract_to_MPS_cache(state, horizontal=False, reverse=False, svd_option=None):
+    from .peps import PEPS
+    num_rotate90 = bool(horizontal) * 1 + bool(reverse) * 2
+    state = state.rotate(-num_rotate90)
+    mps_list = [state.grid[0]]
+    for mpo in state.grid[1:]:
+        mps_list.append(_mps_mult_mpo(mps_list[-1], mpo, svd_option))
+    mps_list = [PEPS(mps.reshape(1, -1), state.backend).rotate(num_rotate90) for mps in mps_list]
+    return [*reversed(mps_list)] if reverse else mps_list

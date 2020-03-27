@@ -140,7 +140,7 @@ class PEPS(QuantumState):
             return NotImplemented
 
     def norm(self, contract_option=None):
-        return sqrt(self.inner(self, contract_option=contract_option))
+        return sqrt(self.inner(self, contract_option=contract_option).real)
 
     def add(self, other, *, coeff=1.0):
         """
@@ -180,7 +180,7 @@ class PEPS(QuantumState):
         return contraction.contract(self, option)
 
     def inner(self, other, contract_option=None):
-        return self.dagger().apply(other).contract(contract_option).real
+        return contraction.contract_sandwich(self.dagger(), other, contract_option)
 
     def statevector(self, contract_option=None):
         from .. import statevector
@@ -269,10 +269,14 @@ class PEPS(QuantumState):
         -------
         output: PEPS
         """
-        tn = np.rot90(self.grid, k=num_rotate90).copy()
-        for idx, tsr in np.ndenumerate(tn):
-            tn[idx] = sites.rotate_z(tsr, -num_rotate90).copy()
-        return PEPS(tn, self.backend)
+        num_rotate90 = num_rotate90 % 4
+        if num_rotate90 == 0:
+            return self
+        else:
+            tn = np.rot90(self.grid, k=num_rotate90).copy()
+            for idx, tsr in np.ndenumerate(tn):
+                tn[idx] = sites.rotate_z(tsr, -num_rotate90).copy()
+            return PEPS(tn, self.backend)
 
 
 def braket(p, observable, q, use_cache=False, contract_option=None):
@@ -291,7 +295,7 @@ def braket(p, observable, q, use_cache=False, contract_option=None):
     for tensor, sites in observable:
         other = q.copy()
         other.apply_operator(q.backend.astensor(tensor), sites)
-        e += p_dagger.apply(other).contract(contract_option)
+        e += contraction.contract_sandwich(p_dagger, other, contract_option)
     return e
 
 
