@@ -137,6 +137,22 @@ class TestPEPS(unittest.TestCase):
         ])
         self.assertTrue(np.isclose(qstate.expectation(observable), -3))
 
+    def test_expectation_single_layer(self, backend):
+        qstate = peps.computational_zeros(2, 3, backend=backend)
+        qstate.apply_circuit([
+            Gate('X', [], [0]),
+            Gate('CX', [], [0,3]),
+            Gate('H', [], [2]),
+        ])
+        observable = 1.5 * Observable.sum([
+            Observable.Z(0) * 2,
+            Observable.Z(1),
+            Observable.Z(2) * 2,
+            Observable.Z(3),
+        ])
+        contract_option = peps.SingleLayer(ImplicitRandomizedSVD(rank=2))
+        self.assertTrue(np.isclose(qstate.expectation(observable, contract_option=contract_option), -3))
+
     def test_expectation_use_cache(self, backend):
         qstate = peps.computational_zeros(2, 3, backend=backend)
         qstate.apply_circuit([
@@ -146,7 +162,7 @@ class TestPEPS(unittest.TestCase):
         ])
         observable = 1.5 * Observable.sum([
             Observable.Z(0) * 2,
-            Observable.Z(1), 
+            Observable.Z(1),
             Observable.Z(2) * 2,
             Observable.Z(3),
         ])
