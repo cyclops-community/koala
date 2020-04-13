@@ -2,7 +2,8 @@
 This module defines PEPS and operations on it.
 """
 
-import random
+import random, json, os
+from pathlib import Path
 from math import sqrt
 from numbers import Number
 from itertools import chain
@@ -338,3 +339,25 @@ def tn_add(backend, a, b, internal_bonds, external_bonds, coeff_a, coeff_b):
 def is_two_local(p, q):
     dx, dy = abs(q[0] - p[0]), abs(q[1] - p[1])
     return dx == 1 and dy == 0 or dx == 0 and dy == 1
+
+
+def save(qstate, dirname):
+    Path(dirname).mkdir(exist_ok=True)
+    with open(os.path.join(dirname, 'koala_peps.json'), 'w+') as file:
+        json.dump({
+            'backend': qstate.backend.name,
+            'nrow': qstate.nrow,
+            'ncol': qstate.ncol,
+        }, file)
+    for i, j in np.ndindex(*qstate.shape):
+        qstate.backend.save(qstate[i, j], os.path.join(dirname, f'{i}_{j}'))
+
+
+def load(dirname):
+    with open(os.path.join(dirname, 'koala_peps.json')) as file:
+        meta = json.load(file)
+    backend = tensorbackends.get(meta['backend'])
+    grid = np.empty((meta['nrow'], meta['ncol']), dtype=object)
+    for i, j in np.ndindex(*grid.shape):
+        grid[i, j] = backend.load(os.path.join(dirname, f'{i}_{j}'))
+    return PEPS(grid, backend)
