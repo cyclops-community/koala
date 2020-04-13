@@ -57,15 +57,15 @@ def random_scalar_peps(nrow, ncol, rank, backend):
     return peps.PEPS(grid, backend)
 
 
-def run_peps(nrow, ncol, maxrank, backend):
+def run_peps(nrow, ncol, maxrank, orth_method, backend):
     qstate = random_scalar_peps(nrow, ncol, maxrank, backend)
-    return qstate.contract(option=peps.BMPS(svd_option=ImplicitRandomizedSVD(maxrank)))
+    return qstate.contract(option=peps.BMPS(svd_option=ImplicitRandomizedSVD(maxrank, orth_method=orth_method)))
 
 
 def main(args):
     t = time.process_time()
     with TimerEpoch(args.backend, 'PEPS_contract'):
-        peps_qstate = run_peps(args.nrow, args.ncol, args.maxrank, args.backend)
+        peps_qstate = run_peps(args.nrow, args.ncol, args.maxrank, args.orth_method, args.backend)
     peps_contract_time = time.process_time() - t
 
     if args.backend in {'ctf', 'ctfview'}:
@@ -93,9 +93,10 @@ def build_cli_parser():
 
     parser.add_argument('-r', '--nrow', help='the number of rows', type=int, default=3)
     parser.add_argument('-c', '--ncol', help='the number of columns', type=int, default=3)
-    
+
     parser.add_argument('-b', '--backend', help='the backend to use', choices=['numpy', 'ctf', 'ctfview'], default='numpy')
     parser.add_argument('-mr', '--maxrank', help='the maxrank in trucated SVD when applying gates', type=int, default=2)
+    parser.add_argument('-om', '--orth-method', help='the orthogonalization method used in implicit randomized SVD', choices=['qr', 'local_gram'], default='qr')
 
     return parser
 
