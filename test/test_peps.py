@@ -131,7 +131,7 @@ class TestPEPS(unittest.TestCase):
         ])
         observable = 1.5 * Observable.sum([
             Observable.Z(0) * 2,
-            Observable.Z(1), 
+            Observable.Z(1),
             Observable.Z(2) * 2,
             Observable.Z(3),
         ])
@@ -177,7 +177,7 @@ class TestPEPS(unittest.TestCase):
         ], update_option=peps.DirectUpdate(ImplicitRandomizedSVD(rank=2)))
         observable = 1.5 * Observable.sum([
             Observable.Z(0) * 2,
-            Observable.Z(1), 
+            Observable.Z(1),
             Observable.Z(2) * 2,
             Observable.Z(3),
         ])
@@ -226,7 +226,7 @@ class TestPEPS(unittest.TestCase):
         norm = qstate.norm(contract_option=Snake())
         for contract_option in contract_options:
             if contract_option is not Snake:
-                for svd_option in (None, ReducedSVD(16), RandomizedSVD(16), ImplicitRandomizedSVD(16)):
+                for svd_option in (None, ReducedSVD(16), RandomizedSVD(16), ImplicitRandomizedSVD(16), ImplicitRandomizedSVD(16, orth_method='local_gram')):
                     with self.subTest(contract_option=contract_option.__name__, svd_option=svd_option):
                         self.assertTrue(np.isclose(norm, qstate.norm(contract_option=contract_option(svd_option))))
 
