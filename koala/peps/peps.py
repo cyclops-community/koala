@@ -2,7 +2,8 @@
 This module defines PEPS and operations on it.
 """
 
-import random
+import random, json, os
+from pathlib import Path
 from math import sqrt
 from numbers import Number
 from itertools import chain
@@ -55,6 +56,9 @@ class PEPS(QuantumState):
     def get_max_bond_dim(self):
         return max(chain.from_iterable(site.shape[0:4] for _, site in np.ndenumerate(self.grid)))
 
+    def truncate(self, update_option=None):
+        update.truncate(self, update_option)
+
     def __getitem__(self, position):
         item = self.grid[position]
         if isinstance(item, np.ndarray):
@@ -93,6 +97,8 @@ class PEPS(QuantumState):
             update.apply_single_site_operator(self, operator, positions[0])
         elif len(positions) == 2 and is_two_local(*positions):
             update.apply_local_pair_operator(self, operator, positions, update_option)
+        elif len(positions) == 2:
+            update.apply_nonlocal_pair_operator(self, operator, positions, update_option)
         else:
             raise ValueError('nonlocal operator is not supported')
 
@@ -135,7 +141,7 @@ class PEPS(QuantumState):
             return NotImplemented
 
     def norm(self, contract_option=None):
-        return sqrt(self.inner(self, contract_option=contract_option))
+        return sqrt(self.inner(self, contract_option=contract_option).real)
 
     def add(self, other, *, coeff=1.0):
         """
@@ -169,13 +175,13 @@ class PEPS(QuantumState):
         return np.abs(self.amplitude(indices, contract_option))**2
 
     def expectation(self, observable, use_cache=False, contract_option=None):
-        return braket(self, observable, self, use_cache=use_cache, contract_option=contract_option)
+        return braket(self, observable, self, use_cache=use_cache, contract_option=contract_option).real
 
     def contract(self, option=None):
         return contraction.contract(self, option)
 
     def inner(self, other, contract_option=None):
-        return self.dagger().apply(other).contract(contract_option).real
+        return contraction.contract_sandwich(self.dagger(), other, contract_option)
 
     def statevector(self, contract_option=None):
         from .. import statevector
@@ -264,10 +270,14 @@ class PEPS(QuantumState):
         -------
         output: PEPS
         """
-        tn = np.rot90(self.grid, k=num_rotate90).copy()
-        for idx, tsr in np.ndenumerate(tn):
-            tn[idx] = sites.rotate_z(tsr, -num_rotate90).copy()
-        return PEPS(tn, self.backend)
+        num_rotate90 = num_rotate90 % 4
+        if num_rotate90 == 0:
+            return self
+        else:
+            tn = np.rot90(self.grid, k=num_rotate90).copy()
+            for idx, tsr in np.ndenumerate(tn):
+                tn[idx] = sites.rotate_z(tsr, -num_rotate90).copy()
+            return PEPS(tn, self.backend)
 
 
 def braket(p, observable, q, use_cache=False, contract_option=None):
@@ -286,7 +296,7 @@ def braket(p, observable, q, use_cache=False, contract_option=None):
     for tensor, sites in observable:
         other = q.copy()
         other.apply_operator(q.backend.astensor(tensor), sites)
-        e += p_dagger.apply(other).contract(contract_option)
+        e += contraction.contract_sandwich(p_dagger, other, contract_option)
     return e
 
 
@@ -329,3 +339,25 @@ def tn_add(backend, a, b, internal_bonds, external_bonds, coeff_a, coeff_b):
 def is_two_local(p, q):
     dx, dy = abs(q[0] - p[0]), abs(q[1] - p[1])
     return dx == 1 and dy == 0 or dx == 0 and dy == 1
+
+
+def save(qstate, dirname):
+    Path(dirname).mkdir(exist_ok=True)
+    with open(os.path.join(dirname, 'koala_peps.json'), 'w+') as file:
+        json.dump({
+            'backend': qstate.backend.name,
+            'nrow': qstate.nrow,
+            'ncol': qstate.ncol,
+        }, file)
+    for i, j in np.ndindex(*qstate.shape):
+        qstate.backend.save(qstate[i, j], os.path.join(dirname, f'{i}_{j}'))
+
+
+def load(dirname):
+    with open(os.path.join(dirname, 'koala_peps.json')) as file:
+        meta = json.load(file)
+    backend = tensorbackends.get(meta['backend'])
+    grid = np.empty((meta['nrow'], meta['ncol']), dtype=object)
+    for i, j in np.ndindex(*grid.shape):
+        grid[i, j] = backend.load(os.path.join(dirname, f'{i}_{j}'))
+    return PEPS(grid, backend)

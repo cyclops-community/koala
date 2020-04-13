@@ -24,3 +24,10 @@ def computational_basis(nsite, bits, *, backend='numpy'):
     tensor = backend.zeros((2,)*nsite, dtype=complex)
     tensor[tuple(bits)] = 1
     return StateVector(tensor, backend)
+
+def random(nsite, *, backend='numpy'):
+    backend = tensorbackends.get(backend)
+    shape = (2,)*nsite
+    tensor = backend.random.uniform(-1,1,shape) + 1j * backend.random.uniform(-1,1,shape)
+    tensor /= backend.norm(tensor)
+    return StateVector(tensor, backend)
