@@ -46,6 +46,7 @@ class DefaultUpdate(UpdateOption):
 
 
 def apply_single_site_operator(state, operator, position):
+    operator = state.backend.astensor(operator)
     state.grid[position] = state.backend.einsum('ijklxp,xy->ijklyp', state.grid[position], operator)
 
 
@@ -143,6 +144,7 @@ def apply_local_pair_operator_direct(state, operator, positions, svd_option):
         svd_option = ReducedSVD()
     x_pos, y_pos = positions
     x, y = state.grid[x_pos], state.grid[y_pos]
+    operator = state.backend.astensor(operator)
 
     if x_pos[0] < y_pos[0]: # [x y]^T
         prod_subscripts = 'abcdxp,cfghyq,xyuv->abndup,nfghvq'
@@ -177,6 +179,7 @@ def apply_local_pair_operator_qr(state, operator, positions, svd_option):
         svd_option = ReducedSVD()
     x_pos, y_pos = positions
     x, y = state.grid[x_pos], state.grid[y_pos]
+    operator = state.backend.astensor(operator)
 
     if x_pos[0] < y_pos[0]: # [x y]^T
         split_x_subscripts = 'abcdxp->abdi,icxp'
@@ -214,6 +217,7 @@ def apply_local_pair_operator_local_gram_qr(state, operator, positions, rank):
     assert len(positions) == 2
     x_pos, y_pos = positions
     x, y = state.grid[x_pos], state.grid[y_pos]
+    operator = state.backend.astensor(operator)
 
     if x_pos[0] < y_pos[0]: # [x y]^T
         gram_x_subscripts = 'abcdxp,abCdXp->xcXC'

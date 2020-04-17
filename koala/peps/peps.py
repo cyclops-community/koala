@@ -91,7 +91,6 @@ class PEPS(QuantumState):
             self.apply_gate(gate, update_option)
 
     def apply_operator(self, operator, sites, update_option=None):
-        operator = self.backend.astensor(operator)
         positions = [divmod(site, self.ncol) for site in sites]
         if len(positions) == 1:
             update.apply_single_site_operator(self, operator, positions[0])
@@ -318,8 +317,8 @@ def _braket_with_cache(p, observable, q, bmps_option):
 
 def tn_add(backend, a, b, internal_bonds, external_bonds, coeff_a, coeff_b):
     """
-    Helper function for addition of two tensor network states with the same structure. 
-    Add two site from two tensor network states respecting specified inner and external bond structure. 
+    Helper function for addition of two tensor network states with the same structure.
+    Add two site from two tensor network states respecting specified inner and external bond structure.
     """
     ndim = a.ndim
     shape_a = np.array(np.shape(a))
@@ -327,7 +326,7 @@ def tn_add(backend, a, b, internal_bonds, external_bonds, coeff_a, coeff_b):
     shape_c = np.copy(shape_a)
     shape_c[internal_bonds] += shape_b[internal_bonds]
     lim = np.copy(shape_a).astype(object)
-    lim[external_bonds] = None    
+    lim[external_bonds] = None
     a_ind = tuple([slice(lim[i]) for i in range(ndim)])
     b_ind = tuple([slice(lim[i], None) for i in range(ndim)])
     c = backend.zeros(shape_c, dtype=a.dtype)
