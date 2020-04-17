@@ -330,7 +330,7 @@ def apply_local_pair_operator_local_gram_qr_svd(state, operator, positions, rank
     xr, xr_inv = gram_qr_local(state.backend, x, gram_x_subscripts, xq_subscripts)
     yr, yr_inv = gram_qr_local(state.backend, y, gram_y_subscripts, yq_subscripts)
 
-    operator = numpy_backend.tensor(operator.numpy())
+    operator = numpy_backend.tensor(operator if isinstance(operator, np.ndarray) else operator.numpy())
     u, s, v = numpy_backend.einsumsvd('ixk,jyk,xyuv->isu,jsv', xr, yr, operator, option=ReducedSVD(rank))
     s **= 0.5
     u = numpy_backend.einsum('xki,isu,s->kxsu', xr_inv, u, s)
