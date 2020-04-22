@@ -58,7 +58,7 @@ class TestPEPS(unittest.TestCase):
             Gate('CX', [], [0,3]),
             Gate('CX', [], [1,4]),
             Gate('S', [], [1]),
-        ], update_option=peps.QRUpdate(ReducedSVD(rank=2)))
+        ], update_option=peps.QRUpdate(rank=2))
         contract_option = peps.BMPS(ReducedSVD(rank=2))
         self.assertTrue(np.isclose(qstate.amplitude([1,0,0,1,0,0], contract_option), 1/np.sqrt(2)))
         self.assertTrue(np.isclose(qstate.amplitude([1,1,0,1,1,0], contract_option), 1j/np.sqrt(2)))
@@ -93,7 +93,7 @@ class TestPEPS(unittest.TestCase):
         update_options = [
             None,
             peps.DirectUpdate(ImplicitRandomizedSVD(rank=2)),
-            peps.QRUpdate(ReducedSVD(rank=2)),
+            peps.QRUpdate(rank=2),
             peps.LocalGramQRUpdate(rank=2),
             peps.LocalGramQRSVDUpdate(rank=2),
         ]

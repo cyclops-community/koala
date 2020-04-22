@@ -26,8 +26,8 @@ class DirectUpdate(UpdateOption):
 
 
 class QRUpdate(UpdateOption):
-    def __init__(self, svd_option=None):
-        self.svd_option = svd_option
+    def __init__(self, rank=None):
+        self.rank = rank
 
 
 class LocalGramQRUpdate(UpdateOption):
@@ -54,11 +54,11 @@ def apply_local_pair_operator(state, operator, positions, update_option):
     if update_option is None:
         update_option = DefaultUpdate()
     if isinstance(update_option, DefaultUpdate):
-        apply_local_pair_operator_qr(state, operator, positions, ReducedSVD(update_option.rank))
+        apply_local_pair_operator_qr(state, operator, positions, update_option.rank)
     elif isinstance(update_option, DirectUpdate):
         apply_local_pair_operator_direct(state, operator, positions, update_option.svd_option)
     elif isinstance(update_option, QRUpdate):
-        apply_local_pair_operator_qr(state, operator, positions, update_option.svd_option)
+        apply_local_pair_operator_qr(state, operator, positions, update_option.rank)
     elif isinstance(update_option, LocalGramQRUpdate):
         apply_local_pair_operator_local_gram_qr(state, operator, positions, update_option.rank)
     elif isinstance(update_option, LocalGramQRSVDUpdate):
@@ -110,11 +110,11 @@ def swap_local_pair(state, x_pos, y_pos, update_option):
     if update_option is None:
         update_option = DefaultUpdate()
     if isinstance(update_option, DefaultUpdate):
-        swap_local_pair_qr(state, x_pos, y_pos, ReducedSVD(update_option.rank))
+        swap_local_pair_qr(state, x_pos, y_pos, update_option.rank)
     elif isinstance(update_option, DirectUpdate):
         swap_local_pair_direct(state, x_pos, y_pos, update_option.svd_option)
     elif isinstance(update_option, QRUpdate):
-        swap_local_pair_qr(state, x_pos, y_pos, update_option.svd_option)
+        swap_local_pair_qr(state, x_pos, y_pos, update_option.rank)
     elif isinstance(update_option, LocalGramQRUpdate):
         swap_local_pair_local_gram_qr(state, x_pos, y_pos, update_option.rank)
     elif isinstance(update_option, LocalGramQRSVDUpdate):
@@ -173,10 +173,9 @@ def apply_local_pair_operator_direct(state, operator, positions, svd_option):
     state.grid[y_pos] = v
 
 
-def apply_local_pair_operator_qr(state, operator, positions, svd_option):
+def apply_local_pair_operator_qr(state, operator, positions, rank):
     assert len(positions) == 2
-    if svd_option is None:
-        svd_option = ReducedSVD()
+    svd_option = ReducedSVD(rank)
     x_pos, y_pos = positions
     x, y = state.grid[x_pos], state.grid[y_pos]
     operator = state.backend.astensor(operator)
@@ -374,9 +373,8 @@ def swap_local_pair_direct(state, x_pos, y_pos, svd_option):
     state.grid[y_pos] = v
 
 
-def swap_local_pair_qr(state, x_pos, y_pos, svd_option):
-    if svd_option is None:
-        svd_option = ReducedSVD()
+def swap_local_pair_qr(state, x_pos, y_pos, rank):
+    svd_option = ReducedSVD(rank)
 
     if x_pos[0] < y_pos[0]: # [x y]^T
         split_x_subscripts = 'abcdxp->abdi,icxp'
