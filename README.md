@@ -1,6 +1,6 @@
 ## Koala
 
-Koala is a quantum circuit/state simulator based on PEPS tensor networks.
+Koala is a quantum circuit/state simulator based on projected entangled–pair states (PEPS) tensor networks.
 
 ### Installation
 
@@ -24,11 +24,12 @@ python -m unittest
 ### Get Started
 ```python
 from koala import peps, Observable, Gate
+from tensorbackends.interface import ImplicitRandomizedSVD
 
 # initialize a 2 by 3 state with peps approach and numpy backend
 qstate = peps.computational_zeros(2, 3, backend='numpy')
 
-# we also provide statevector approach and parallel backend
+# we also provide the state vector approach and a parallel backend
 # statevector.computational_zeros(2, 3, backend='ctf')
 
 # apply one gate or a list of gates
@@ -36,10 +37,10 @@ qstate.apply_gate(Gate('X', [], [0])) # (name, parameters, qubits)
 qstate.apply_circuit([
     Gate('R', [0.42], [2]),
     Gate('CX', [], [1,4])
-], threshold=None, maxrank=None)
-# optional truncation threshold and rank for approximate simulation
+], update_option=peps.LocalGramQRUpdate(rank=4))
+# choose from a list of update algorithms and optionally specify the cap bond dimension for approximate state evolution
 
-# or apply arbitrary single site or local two-site operators
+# or apply arbitrary single-site or two-site operators
 # qstate.apply_operator(np.array(...), [0])
 
 # compute the amplitude, probability, and expectation value
@@ -49,5 +50,10 @@ observable = 1.5 * Observable.sum([
     Observable.Z(0),
     Observable.XY(3, 4) * 2
 ])
-qstate.expectation(observable, use_cache=True) # optional caching
+qstate.expectation(observable, 
+    contract_option=peps.BMPS(ImplicitRandomizedSVD(rank=8)), 
+    use_cache=True
+)
+# choose from a list of contraction algorithms and optionally specify the cap bond dimension for approximate contraction
+# use built-in caching option to trade memory for time in expectation value calculations
 ```
