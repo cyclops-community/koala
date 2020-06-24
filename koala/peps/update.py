@@ -47,7 +47,7 @@ class DefaultUpdate(UpdateOption):
 
 def apply_single_site_operator(state, operator, position):
     operator = state.backend.astensor(operator)
-    state.grid[position] = state.backend.einsum('ijklxp,xy->ijklyp', state.grid[position], operator)
+    state.grid[position] = state.backend.einsum('ijklxp,yx->ijklyp', state.grid[position], operator)
 
 
 def apply_local_pair_operator(state, operator, positions, update_option):
@@ -128,7 +128,7 @@ def truncate(state, update_option):
     def apply_identity(x_pos, y_pos):
         dims = state.grid[x_pos].shape[4], state.grid[y_pos].shape[4]
         if dims not in identities:
-            identities[dims] = state.backend.astensor(np.einsum('xu,yv->xyuv', np.eye(dims[0]), np.eye(dims[1])))
+            identities[dims] = state.backend.astensor(np.einsum('ux,vy->uvxy', np.eye(dims[0]), np.eye(dims[1])))
         apply_local_pair_operator(state, identities[dims], (x_pos, y_pos), update_option)
 
     for i, j in np.ndindex(*state.shape):
@@ -147,19 +147,19 @@ def apply_local_pair_operator_direct(state, operator, positions, svd_option):
     operator = state.backend.astensor(operator)
 
     if x_pos[0] < y_pos[0]: # [x y]^T
-        prod_subscripts = 'abcdxp,cfghyq,xyuv->abndup,nfghvq'
+        prod_subscripts = 'abcdxp,cfghyq,uvxy->abndup,nfghvq'
         scale_u_subscripts = 'absdup,s->absdup'
         scale_v_subscripts = 'sbcdvp,s->sbcdvp'
     elif x_pos[0] > y_pos[0]: # [y x]^T
-        prod_subscripts = 'abcdxp,efahyq,xyuv->nbcdup,efnhvq'
+        prod_subscripts = 'abcdxp,efahyq,uvxy->nbcdup,efnhvq'
         scale_u_subscripts = 'sbcdup,s->sbcdup'
         scale_v_subscripts = 'absdvp,s->absdvp'
     elif x_pos[1] < y_pos[1]: # [x y]
-        prod_subscripts = 'abcdxp,efgbyq,xyuv->ancdup,efgnvq'
+        prod_subscripts = 'abcdxp,efgbyq,uvxy->ancdup,efgnvq'
         scale_u_subscripts = 'ascdup,s->ascdup'
         scale_v_subscripts = 'abcsvp,s->abcsvp'
     elif x_pos[1] > y_pos[1]: # [y x]
-        prod_subscripts = 'abcdxp,edghyq,xyuv->abcnup,enghvq'
+        prod_subscripts = 'abcdxp,edghyq,uvxy->abcnup,enghvq'
         scale_u_subscripts = 'abcsup,s->abcsup'
         scale_v_subscripts = 'ascdvp,s->ascdvp'
     else:
@@ -206,7 +206,7 @@ def apply_local_pair_operator_qr(state, operator, positions, rank):
     xq, xr = state.backend.einqr(split_x_subscripts, x)
     yq, yr = state.backend.einqr(split_y_subscripts, y)
 
-    u, s, v = state.backend.einsumsvd('ikxp,jkyq,xyuv->isup,jsvq', xr, yr, operator, option=svd_option)
+    u, s, v = state.backend.einsumsvd('ikxp,jkyq,uvxy->isup,jsvq', xr, yr, operator, option=svd_option)
     s = s ** 0.5
     state.grid[x_pos] = state.backend.einsum(recover_x_subscripts, xq, u, s)
     state.grid[y_pos] = state.backend.einsum(recover_y_subscripts, yq, v, s)
@@ -269,7 +269,7 @@ def apply_local_pair_operator_local_gram_qr(state, operator, positions, rank):
     xq, xr = gram_qr_local(state.backend, x, gram_x_subscripts, xq_subscripts)
     yq, yr = gram_qr_local(state.backend, y, gram_y_subscripts, yq_subscripts)
 
-    u, s, v = state.backend.einsumsvd('ixk,jyk,xyuv->isu,jsv', xr, yr, operator, option=ReducedSVD(rank))
+    u, s, v = state.backend.einsumsvd('ixk,jyk,uvxy->isu,jsv', xr, yr, operator, option=ReducedSVD(rank))
     s = s ** 0.5
     state.grid[x_pos] = state.backend.einsum(recover_x_subscripts, xq, u, s)
     state.grid[y_pos] = state.backend.einsum(recover_y_subscripts, yq, v, s)
@@ -330,7 +330,7 @@ def apply_local_pair_operator_local_gram_qr_svd(state, operator, positions, rank
     yr, yr_inv = gram_qr_local(state.backend, y, gram_y_subscripts, yq_subscripts)
 
     operator = numpy_backend.tensor(operator if isinstance(operator, np.ndarray) else operator.numpy())
-    u, s, v = numpy_backend.einsumsvd('ixk,jyk,xyuv->isu,jsv', xr, yr, operator, option=ReducedSVD(rank))
+    u, s, v = numpy_backend.einsumsvd('ixk,jyk,uvxy->isu,jsv', xr, yr, operator, option=ReducedSVD(rank))
     s **= 0.5
     u = numpy_backend.einsum('xki,isu,s->kxsu', xr_inv, u, s)
     v = numpy_backend.einsum('ykj,jsv,s->kysv', yr_inv, v, s)

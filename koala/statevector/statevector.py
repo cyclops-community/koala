@@ -66,7 +66,7 @@ def apply_operator(backend, state_tensor, operator, axes):
     operator = backend.astensor(operator)
     ndim = state_tensor.ndim
     input_state_indices = range(ndim)
-    operator_indices = [*axes, *range(ndim, ndim+len(axes))]
+    operator_indices = [*range(ndim, ndim+len(axes)), *axes]
     output_state_indices = [*range(ndim)]
     for i, axis in enumerate(axes):
         output_state_indices[axis] = i + ndim
