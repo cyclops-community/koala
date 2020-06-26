@@ -17,11 +17,11 @@ class TestStateVector(unittest.TestCase):
             Gate('CX', [], [1,4]),
             Gate('S', [], [1]),
         ])
-        self.assertTrue(np.isclose(qstate.norm(), 1))
+        self.assertTrue(backend.isclose(qstate.norm(), 1))
         qstate *= 2
-        self.assertTrue(np.isclose(qstate.norm(), 2))
+        self.assertTrue(backend.isclose(qstate.norm(), 2))
         qstate /= 2j
-        self.assertTrue(np.isclose(qstate.norm(), 1))
+        self.assertTrue(backend.isclose(qstate.norm(), 1))
 
     def test_amplitude(self, backend):
         qstate = statevector.computational_zeros(6, backend=backend)
@@ -32,8 +32,8 @@ class TestStateVector(unittest.TestCase):
             Gate('CX', [], [1,4]),
             Gate('S', [], [1]),
         ])
-        self.assertTrue(np.isclose(qstate.amplitude([1,0,0,1,0,0]), 1/np.sqrt(2)))
-        self.assertTrue(np.isclose(qstate.amplitude([1,1,0,1,1,0]), 1j/np.sqrt(2)))
+        self.assertTrue(backend.isclose(qstate.amplitude([1,0,0,1,0,0]), 1/np.sqrt(2)))
+        self.assertTrue(backend.isclose(qstate.amplitude([1,1,0,1,1,0]), 1j/np.sqrt(2)))
 
     def test_probablity(self, backend):
         qstate = statevector.computational_zeros(6, backend=backend)
@@ -44,8 +44,8 @@ class TestStateVector(unittest.TestCase):
             Gate('CX', [], [1,4]),
             Gate('S', [], [1]),
         ])
-        self.assertTrue(np.isclose(qstate.probability([1,0,0,1,0,0]), 1/2))
-        self.assertTrue(np.isclose(qstate.probability([1,1,0,1,1,0]), 1/2))
+        self.assertTrue(backend.isclose(qstate.probability([1,0,0,1,0,0]), 1/2))
+        self.assertTrue(backend.isclose(qstate.probability([1,1,0,1,1,0]), 1/2))
 
     def test_expectation(self, backend):
         qstate = statevector.computational_zeros(6, backend=backend)
@@ -60,12 +60,12 @@ class TestStateVector(unittest.TestCase):
             Observable.Z(2) * 2,
             Observable.Z(3),
         ])
-        self.assertTrue(np.isclose(qstate.expectation(observable), -3))
+        self.assertTrue(backend.isclose(qstate.expectation(observable), -3))
 
     def test_add(self, backend):
         psi = statevector.computational_zeros(6, backend=backend)
         phi = statevector.computational_ones(6, backend=backend)
-        self.assertTrue(np.isclose((psi + phi).norm(), np.sqrt(2)))
+        self.assertTrue(backend.isclose((psi + phi).norm(), np.sqrt(2)))
 
     def test_inner(self, backend):
         psi = statevector.computational_zeros(6, backend=backend)
@@ -75,4 +75,4 @@ class TestStateVector(unittest.TestCase):
             Gate('H', [], [3]),
         ])
         phi = statevector.computational_zeros(6, backend=backend)
-        self.assertTrue(np.isclose(psi.inner(phi), 0.5))
+        self.assertTrue(backend.isclose(psi.inner(phi), 0.5))

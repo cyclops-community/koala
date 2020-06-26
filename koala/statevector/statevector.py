@@ -47,7 +47,7 @@ class StateVector(QuantumState):
         return self.tensor[tuple(indices)]
 
     def probability(self, indices):
-        return np.abs(self.amplitude(indices))**2
+        return abs(self.amplitude(indices))**2
 
     def expectation(self, observable):
         return braket(self, observable, self).real
