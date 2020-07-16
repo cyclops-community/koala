@@ -18,7 +18,7 @@ and leg 5 as the dimension of the dual space w.r.t leg 4. Also conventionally,
 
 import numpy as np
 
-from .utils import svd_splitter
+from .utils import svd_merger
 
 
 def contract_x(a, b):
@@ -32,13 +32,13 @@ def contract_z(a, b):
 
 
 def reduce_x(a, b, option):
-    return svd_splitter('abIdpq,IBcDPQ', *a.backend.einsumsvd('abidpq,iBcDPQ->abIdpq,IBcDPQ', a, b, option=option))
+    return svd_merger('abIdpq,IBcDPQ', *a.backend.einsumsvd('abidpq,iBcDPQ->abIdpq,IBcDPQ', a, b, option=option))
 
 def reduce_y(a, b, option):
-    return svd_splitter('aIcdpq,AbCIPQ', *a.backend.einsumsvd('aicdpq,AbCiPQ->aIcdpq,AbCIPQ', a, b, option=option))
+    return svd_merger('aIcdpq,AbCIPQ', *a.backend.einsumsvd('aicdpq,AbCiPQ->aIcdpq,AbCIPQ', a, b, option=option))
 
 def reduce_z(a, b, option):
-    return svd_splitter('abcdpI,ABCDIq', *a.backend.einsumsvd('abcdpi,ABCDiq->abcdpI,ABCDIq', a, b, option=option))
+    return svd_merger('abcdpI,ABCDIq', *a.backend.einsumsvd('abcdpi,ABCDiq->abcdpI,ABCDIq', a, b, option=option))
 
 
 def rotate_x(a, n=1):

@@ -7,7 +7,7 @@ import numpy as np
 from tensorbackends.interface import ReducedSVD, ImplicitRandomizedSVD
 
 from . import sites
-from .utils import svd_splitter
+from .utils import svd_merger
 
 
 class ContractOption:
@@ -219,7 +219,7 @@ def contract_single_layer(state1, state2, svd_option=None):
                 if j == 0:
                     mps[0] = s.backend.einsum('xyijzpP,ibcdqk,jBCDkQ->xybBcC(zdD)(pq)(PQ)', s, o1, o2)
                 else:
-                    mps[j-1], mps[j] = svd_splitter('azxXdpP,AybBcCzqQ', *s.backend.einsumsvd(
+                    mps[j-1], mps[j] = svd_merger('azxXdpP,AybBcCzqQ', *s.backend.einsumsvd(
                         'aijkxXdpP,AylmiqQ,lbcjrn,mBCknR->azxXdpP,AybBcCz(qr)(QR)', mps[j-1], s, o1, o2, option=svd_option))
                     if j == len(mps)-1:
                         mps[-1] = s.backend.einsum('AybBcCzqQ->A(ybB)cCzqQ', mps[-1])
@@ -402,7 +402,7 @@ def contract_TRG(state, svd_option_1st=None, svd_option_rem=None):
     tn = np.empty(state.shape + (2,), dtype=object)
     for (i, j), tsr in np.ndenumerate(state.grid):
         str_uv = 'abi,icdpq' if (i+j) % 2 == 0 else 'aidpq,bci'
-        tn[i,j,0], tn[i,j,1] = svd_splitter(str_uv, *state.backend.einsumsvd(
+        tn[i,j,0], tn[i,j,1] = svd_merger(str_uv, *state.backend.einsumsvd(
             'abcdpq->' + str_uv, tsr, option=(svd_option_1st or ReducedSVD())))
         tn[i,j,(i+j)%2] = tn[i,j,(i+j)%2].reshape(*(tn[i,j,(i+j)%2].shape + (1, 1)))
     return _contract_TRG(state, tn, svd_option_rem)
@@ -426,7 +426,7 @@ def _contract_TRG(state, tn, svd_option=None):
             tn[i,l][k] = state.backend.einsum(
                 'ibapq,ABiPQ->A(bB)a(pP)(qQ)' if k else 'biapq,BAiPQ->(bB)Aa(pP)(qQ)', tn[i,j-1][k], tn[i,j][k])
             if i % 2 == 1 and svd_option is not None:
-                tn[i-1,l][1], tn[i,l][0] = svd_splitter('aIdpq,IBCPQ', *state.backend.einsumsvd(
+                tn[i-1,l][1], tn[i,l][0] = svd_merger('aIdpq,IBCPQ', *state.backend.einsumsvd(
                     'aidpq,iBCPQ->aIdpq,IBCPQ', tn[i-1,l][1], tn[i,l][0], option=svd_option))
         if i > 0 and i % 2 == 0:
             k = 1 - j % 2
@@ -434,7 +434,7 @@ def _contract_TRG(state, tn, svd_option=None):
             tn[i-l,j][l] = state.backend.einsum(
                 'biapq,iBAPQ->(bB)Aa(pP)(qQ)' if k else 'aibpq,iABPQ->aA(bB)(pP)(qQ)', tn[i-1,j][1], tn[i,j][0])
             if j % 2 == 1 and svd_option is not None:
-                tn[i-l,j-1][l], tn[i-l,j][l] = svd_splitter('Icdpq,ABIPQ', *state.backend.einsumsvd(
+                tn[i-l,j-1][l], tn[i-l,j][l] = svd_merger('Icdpq,ABIPQ', *state.backend.einsumsvd(
                     'icdpq,ABiPQ->Icdpq,ABIPQ', tn[i-l,j-1][l], tn[i-l,j][l], option=svd_option))
 
     # contract specific diagonal bonds and generate a smaller tensor network
@@ -465,10 +465,10 @@ def _contract_TRG(state, tn, svd_option=None):
     if svd_option is not None:
         for i, j in np.ndindex(new_tn.shape[:2]):
             if (i + j) % 2 == 0 and new_tn[i,j][0] is not None and new_tn[i,j][1] is not None:
-                new_tn[i,j][0], new_tn[i,j][1] = svd_splitter('abIpq,ICDPQ', *state.backend.einsumsvd(
+                new_tn[i,j][0], new_tn[i,j][1] = svd_merger('abIpq,ICDPQ', *state.backend.einsumsvd(
                     'abipq,iCDPQ->abIpq,ICDPQ', new_tn[i,j][0], new_tn[i,j][1], option=svd_option))
             elif (i + j) % 2 == 1:
-                new_tn[i,j][0], new_tn[i,j][1] = svd_splitter('aIdpq,BCIPQ', *state.backend.einsumsvd(
+                new_tn[i,j][0], new_tn[i,j][1] = svd_merger('aIdpq,BCIPQ', *state.backend.einsumsvd(
                     'aidpq,BCiPQ->aIdpq,BCIPQ', new_tn[i,j][0], new_tn[i,j][1], option=svd_option))
 
     return _contract_TRG(state, new_tn, svd_option)
@@ -481,7 +481,7 @@ def _compress_contract_first(mps, mpo, svd_option=None):
             if i == 0:
                 new_mps[0] = s.backend.einsum('abidpq,iBcDPQ->abBc(dD)(pP)(qQ)', s, o)
             else:
-                new_mps[i-1], new_mps[i] = svd_splitter('aIcdpP,AbBCIqQ', *s.backend.einsumsvd(
+                new_mps[i-1], new_mps[i] = svd_merger('aIcdpP,AbBCIqQ', *s.backend.einsumsvd(
                     'aijcdpP,AbkiqQ,kBCjrR->aIcdpP,AbBCI(qr)(QR)', new_mps[i-1], s, o, option=svd_option))
                 if i == len(mps)-1:
                     new_mps[-1] = s.backend.einsum('abBcdpq->a(bB)cdpq', new_mps[-1])
@@ -495,12 +495,12 @@ def _compress_svd_first(mps, mpo, svd_option=None):
     for i, (s, o) in enumerate(zip(mps, mpo)):
         if svd_option:
             if i == 0:
-                new_mps[0], left = svd_splitter('axcdpq,bBx', *s.backend.einsumsvd(
+                new_mps[0], left = svd_merger('axcdpq,bBx', *s.backend.einsumsvd(
                     'abidpq,iBcDPQ->axc(dD)(pP)(qQ),bBx', s, o, option=svd_option))
             elif i == len(mps)-1:
                 new_mps[-1] = s.backend.einsum('ijd,abkipP,kBcjqQ->a(bB)cd(pP)(qQ)', left, s, o)
             else:
-                new_mps[i], left = svd_splitter('axcdpP,bBx', *s.backend.einsumsvd(
+                new_mps[i], left = svd_merger('axcdpP,bBx', *s.backend.einsumsvd(
                     'ijd,abkipP,kBcjqQ->axcd(pP)(qQ),bBx', left, s, o, option=svd_option))
         else:
             new_mps[i] = sites.contract_x(s, o)
