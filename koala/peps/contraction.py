@@ -31,9 +31,10 @@ class ABMPS(ContractOption):
         self.compress_alg = compress_alg
 
 class BMPS(ContractOption):
-    def __init__(self, svd_option=None, compress_alg='contract first'):
+    def __init__(self, svd_option=None, compress_alg='contract first', canonicalize=False):
         self.svd_option = svd_option
         self.compress_alg = compress_alg
+        self.canonicalize = canonicalize
 
 class SingleLayer(ContractOption):
     def __init__(self, svd_option=None):
@@ -76,9 +77,9 @@ def contract(state, option):
     if isinstance(option, Snake):
         return contract_snake(state)
     elif isinstance(option, ABMPS):
-        return contract_ABMPS(state, compress_alg=option.compress_alg, svd_option=option.svd_option)
+        return contract_ABMPS(state, svd_option=option.svd_option, compress_alg=option.compress_alg)
     elif isinstance(option, BMPS):
-        return contract_BMPS(state, compress_alg=option.compress_alg, svd_option=option.svd_option)
+        return contract_BMPS(state, svd_option=option.svd_option, compress_alg=option.compress_alg, canonicalize=option.canonicalize)
     elif isinstance(option, SingleLayer):
         return contract_single_layer(*state, svd_option=option.svd_option)
     elif isinstance(option, Square):
@@ -125,10 +126,10 @@ def contract_ABMPS(state, compress_alg='contract first', svd_option=None):
         body = state[:,2:] if horizontal else state[2:]
         state = contract_to_MPS(edge, horizontal=horizontal, svd_option=svd_option).concatenate(body, int(horizontal))
         horizontal = not horizontal
-    return contract_BMPS(state, compress_alg)
+    return contract_BMPS(state)
 
 
-def contract_BMPS(state, compress_alg='contract first', svd_option=None):
+def contract_BMPS(state, svd_option=None, compress_alg='contract first', canonicalize=False):
     """
     Contract the PEPS by contracting each MPS layer.
 
@@ -146,7 +147,7 @@ def contract_BMPS(state, compress_alg='contract first', svd_option=None):
         The contraction result.
     """
     # contract boundary MPS down
-    mps = contract_to_MPS(state, horizontal=False, reverse=False, compress_alg=compress_alg, svd_option=svd_option).grid.reshape(-1)
+    mps = contract_to_MPS(state, horizontal=False, reverse=False, svd_option=svd_option, compress_alg=compress_alg, canonicalize=canonicalize).grid.reshape(-1)
     # contract the last MPS to a single tensor
     result = mps[0]
     for tsr in mps[1:]:
@@ -338,7 +339,7 @@ def contract_squares_variant(state, svd_option=None):
     return contract_squares_variant(PEPS(new_tn, state.backend), svd_option)
 
 
-def contract_to_MPS(state, horizontal=False, reverse=False, compress_alg='contract first', svd_option=None):
+def contract_to_MPS(state, horizontal=False, reverse=False, svd_option=None, compress_alg='contract first', canonicalize=False):
     """
     Contract the PEPS to an MPS.
 
@@ -367,7 +368,7 @@ def contract_to_MPS(state, horizontal=False, reverse=False, compress_alg='contra
     state = state.rotate(-num_rotate90)
     mps = state.grid[0]
     for i, mpo in enumerate(state.grid[1:]):
-        mps = compress_alg(mps, mpo, svd_option)
+        mps = compress_alg(mps, mpo, svd_option=svd_option, canonicalize=('left' if i % 2 else 'right') if canonicalize else False)
     result = PEPS(mps.reshape(1, -1), state.backend).rotate(num_rotate90)
     return result
 
@@ -474,23 +475,33 @@ def _contract_TRG(state, tn, svd_option=None):
     return _contract_TRG(state, new_tn, svd_option)
 
 
-def _compress_contract_first(mps, mpo, svd_option=None):
+def _compress_contract_first(mps, mpo, svd_option=None, canonicalize=False):
     new_mps = np.empty_like(mps)
+    if canonicalize == 'right':
+        mps = mps[::-1]
+        mpo = mpo[::-1]
     for i, (s, o) in enumerate(zip(mps, mpo)):
+        if canonicalize == 'right':
+            s = s.backend.einsum('abcdpq->adcbpq', s)
+            o = o.backend.einsum('abcdpq->adcbpq', o)
         if svd_option:
             if i == 0:
                 new_mps[0] = s.backend.einsum('abidpq,iBcDPQ->abBc(dD)(pP)(qQ)', s, o)
             else:
                 new_mps[i-1], new_mps[i] = svd_merger('aIcdpP,AbBCIqQ', *s.backend.einsumsvd(
-                    'aijcdpP,AbkiqQ,kBCjrR->aIcdpP,AbBCI(qr)(QR)', new_mps[i-1], s, o, option=svd_option))
+                    'aijcdpP,AbkiqQ,kBCjrR->aIcdpP,AbBCI(qr)(QR)', new_mps[i-1], s, o, option=svd_option), merge_with='v' if canonicalize else 'both')
                 if i == len(mps)-1:
                     new_mps[-1] = s.backend.einsum('abBcdpq->a(bB)cdpq', new_mps[-1])
         else:
             new_mps[i] = sites.contract_x(s, o)
+    if canonicalize == 'right':
+        new_mps = new_mps[::-1]
+        for i, s in enumerate(new_mps):
+            new_mps[i] = s.backend.einsum('abcdpq->adcbpq', s)
     return new_mps
 
 
-def _compress_svd_first(mps, mpo, svd_option=None):
+def _compress_svd_first(mps, mpo, svd_option=None, canonicalize=False):
     new_mps = np.empty_like(mps)
     for i, (s, o) in enumerate(zip(mps, mpo)):
         if svd_option:
