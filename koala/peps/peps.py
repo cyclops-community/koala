@@ -63,12 +63,22 @@ class PEPS(QuantumState):
         item = self.grid[position]
         if isinstance(item, np.ndarray):
             if item.ndim == 1:
-                if isinstance(position[0], int):
+                if isinstance(position, int) or isinstance(position[0], int):
                     item = item.reshape(1, -1)
                 else:
                     item = item.reshape(-1, 1)
             return PEPS(item, self.backend)
         return item
+
+    def __iter__(self):
+        if self.nrow == 1:
+            return self.grid.reshape(-1).__iter__()
+        return PEPS(self.grid.__iter__(), self.backend)
+
+    def __next__(self):
+        if self.nrow == 1:
+            return self.grid.reshape(-1).__next__()
+        return PEPS(self.grid.__next__(), self.backend)
 
     def copy(self):
         grid = np.empty_like(self.grid)

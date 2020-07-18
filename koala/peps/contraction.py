@@ -7,7 +7,7 @@ import numpy as np
 from tensorbackends.interface import ReducedSVD, ImplicitRandomizedSVD
 
 from . import sites
-from .utils import svd_merger
+from .utils import svd_merger, vector_reshaper_BMPS
 
 
 class ContractOption:
@@ -147,15 +147,10 @@ def contract_BMPS(state, svd_option=None, compress_alg='contract first', canonic
     output: state.backend.tensor or scalar
         The contraction result.
     """
-    # contract boundary MPS down
-    mps = contract_to_MPS(state, horizontal=False, reverse=False, svd_option=svd_option, compress_alg=compress_alg, canonicalize=canonicalize).grid.reshape(-1)
-    # contract the last MPS to a single tensor
-    result = mps[0]
-    for tsr in mps[1:]:
-        result = sites.contract_y(result, tsr)
-    return result.item() if result.size == 1 else result.reshape(
-        *[int(round(result.size ** (1 / state.grid.size)))] * state.grid.size
-        ).transpose(*[i + j * state.nrow for i, j in np.ndindex(*state.shape)])
+    # contract boundary MPS down then contract the last MPS to a single tensor
+    return vector_reshaper_BMPS(contract_MPS(contract_to_MPS(
+        state, horizontal=False, reverse=False, svd_option=svd_option, compress_alg=compress_alg, canonicalize=canonicalize
+        )), state.shape)
 
 
 def contract_env(state, row_range, col_range, svd_option=None):
@@ -197,6 +192,13 @@ def contract_env(state, row_range, col_range, svd_option=None):
     return env_peps
     
     
+def contract_MPS(mps):
+    result = mps[0,0]
+    for tsr in mps[0,1:]:
+        result = sites.contract_y(result, tsr)
+    return result
+
+
 def contract_single_layer(state1, state2, svd_option=None, compress_alg='contract first'):
     """
     Contract the PEPS by contracting each MPS layer.
@@ -212,6 +214,7 @@ def contract_single_layer(state1, state2, svd_option=None, compress_alg='contrac
         The contraction result.
     """
     # contract boundary MPS down
+    from .peps import PEPS
     mps = np.empty_like(state1.grid[0])
     for i, (tsr1, tsr2) in enumerate(zip(state1.grid[0], state2.grid[0])):
         mps[i] = state1.backend.einsum('abcdpi,ABCDiq->(aA)(bB)cC(dD)pq', tsr1, tsr2)
@@ -246,13 +249,7 @@ def contract_single_layer(state1, state2, svd_option=None, compress_alg='contrac
     # contract the last MPS to a single tensor
     for i, tsr in enumerate(mps):
         mps[i] = state1.backend.einsum('abcCdpP->ab(cC)dpP', tsr)
-    result = mps[0]
-    for tsr in mps[1:]:
-        result = sites.contract_y(result, tsr)
-    return result.item() if result.size == 1 else result.reshape(
-        *[int(round(result.size ** (1 / state1.grid.size)))] * state1.grid.size
-        ).transpose(*[i + j * state1.nrow for i, j in np.ndindex(*state1.shape)])
-
+    return vector_reshaper_BMPS(contract_MPS(PEPS(mps.reshape(1, -1), state1.backend)), state1.shape)
 
 def contract_snake(state):
     """
@@ -275,7 +272,7 @@ def contract_snake(state):
             tsr = state.backend.einsum('agbcdef->abc(gd)ef', tsr.reshape(*((1,) + tsr.shape)))
             head = sites.contract_y(head, tsr)
         head = head.transpose(2, 1, 0, 3, 4, 5)
-    return head.item() if head.size == 1 else head.reshape(*[int(round(head.size ** (1 / state.grid.size)))] * state.grid.size)
+    return head.item() if head.size == 1 else head.reshape(*[int(round(head.size ** (1 / state.nsite)))] * state.nsite)
 
 
 def contract_squares(state, svd_option=None):
@@ -385,8 +382,8 @@ def contract_to_MPS(state, horizontal=False, reverse=False, svd_option=None, com
     mps = state.grid[0]
     for i, mpo in enumerate(state.grid[1:]):
         mps = compress_alg(mps, mpo, svd_option=svd_option, canonicalize=('left' if i % 2 else 'right') if canonicalize else False)
-    result = PEPS(mps.reshape(1, -1), state.backend).rotate(num_rotate90)
-    return result
+    return PEPS(mps.reshape(1, -1), state.backend).rotate(num_rotate90)
+    
 
 
 def contract_TRG(state, svd_option_1st=None, svd_option_rem=None):
