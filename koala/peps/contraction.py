@@ -37,8 +37,9 @@ class BMPS(ContractOption):
         self.canonicalize = canonicalize
 
 class SingleLayer(ContractOption):
-    def __init__(self, svd_option=None):
+    def __init__(self, svd_option=None, compress_alg='contract first'):
         self.svd_option = svd_option
+        self.compress_alg = compress_alg
 
 class Snake(ContractOption):
     pass
@@ -81,7 +82,7 @@ def contract(state, option):
     elif isinstance(option, BMPS):
         return contract_BMPS(state, svd_option=option.svd_option, compress_alg=option.compress_alg, canonicalize=option.canonicalize)
     elif isinstance(option, SingleLayer):
-        return contract_single_layer(*state, svd_option=option.svd_option)
+        return contract_single_layer(*state, svd_option=option.svd_option, compress_alg=option.compress_alg)
     elif isinstance(option, Square):
         return contract_squares(state, svd_option=option.svd_option)
     elif isinstance(option, TRG):
@@ -98,7 +99,7 @@ def contract_sandwich(state1, state2, option):
     if option is None:
         option = SingleLayer(None)
     if isinstance(option, SingleLayer):
-        return contract_single_layer(state1, state2, svd_option=option.svd_option)
+        return contract_single_layer(state1, state2, svd_option=option.svd_option, compress_alg=option.compress_alg)
     else:
         return contract(state1.apply(state2), option=option)
 
@@ -196,7 +197,7 @@ def contract_env(state, row_range, col_range, svd_option=None):
     return env_peps
     
     
-def contract_single_layer(state1, state2, svd_option=None):
+def contract_single_layer(state1, state2, svd_option=None, compress_alg='contract first'):
     """
     Contract the PEPS by contracting each MPS layer.
 
@@ -216,16 +217,31 @@ def contract_single_layer(state1, state2, svd_option=None):
         mps[i] = state1.backend.einsum('abcdpi,ABCDiq->(aA)(bB)cC(dD)pq', tsr1, tsr2)
     for i, (mpo1, mpo2) in enumerate(zip(state1.grid[1:], state2.grid[1:])):
         for j, (s, o1, o2) in enumerate(zip(mps, mpo1, mpo2)):
-            if svd_option:
-                if j == 0:
-                    mps[0] = s.backend.einsum('xyijzpP,ibcdqk,jBCDkQ->xybBcC(zdD)(pq)(PQ)', s, o1, o2)
+            if compress_alg is None or compress_alg == 'contract first':
+                if svd_option:
+                    if j == 0:
+                        mps[0] = s.backend.einsum('xyijzpP,ibcdqk,jBCDkQ->xybBcC(zdD)(pq)(PQ)', s, o1, o2)
+                    else:
+                        mps[j-1], mps[j] = svd_merger('azxXdpP,AybBcCzqQ', *s.backend.einsumsvd(
+                            'aijkxXdpP,AylmiqQ,lbcjrn,mBCknR->azxXdpP,AybBcCz(qr)(QR)', mps[j-1], s, o1, o2, option=svd_option))
+                        if j == len(mps)-1:
+                            mps[-1] = s.backend.einsum('AybBcCzqQ->A(ybB)cCzqQ', mps[-1])
                 else:
-                    mps[j-1], mps[j] = svd_merger('azxXdpP,AybBcCzqQ', *s.backend.einsumsvd(
-                        'aijkxXdpP,AylmiqQ,lbcjrn,mBCknR->azxXdpP,AybBcCz(qr)(QR)', mps[j-1], s, o1, o2, option=svd_option))
-                    if j == len(mps)-1:
-                        mps[-1] = s.backend.einsum('AybBcCzqQ->A(ybB)cCzqQ', mps[-1])
-            else:
-                mps[j] = s.backend.einsum('xyijzpP,ibcdqk,jBCDkQ->x(ybB)cC(zdD)(pq)(PQ)', s, o1, o2)
+                    mps[j] = s.backend.einsum('xyijzpP,ibcdqk,jBCDkQ->x(ybB)cC(zdD)(pq)(PQ)', s, o1, o2)
+            elif compress_alg == 'svd first':
+                if svd_option:
+                    if j == 0:
+                        mps[0], s_left = svd_merger('xncCdpP,ybBn', *s.backend.einsumsvd(
+                            'xyijzpP,ibcdqk,jBCDkQ->xncC(zdD)(pq)(PQ),ybBn', s, o1, o2))
+                    elif j == len(mps)-1:
+                        mps[-1] = s.backend.einsum('ijkd,AylmiqQ,lbcjrn,mBCknR->A(ybB)cCd(qr)(QR)', s_left, s, o1, o2)
+                    else:
+                        mps[j], s_left = svd_merger('AzcCdqr,ybBz', *s.backend.einsumsvd(
+                            'ijkd,AylmiqQ,lbcjrn,mBCknR->AzcCd(qr)(QR),ybBz', s_left, s, o1, o2, option=svd_option))
+                else:
+                    mps[j] = s.backend.einsum('xyijzpP,ibcdqk,jBCDkQ->x(ybB)cC(zdD)(pq)(PQ)', s, o1, o2)
+            elif not callable(compress_alg):
+                raise ValueError('Invalid compress algorithm')
 
     # contract the last MPS to a single tensor
     for i, tsr in enumerate(mps):
