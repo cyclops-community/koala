@@ -18,8 +18,6 @@ and leg 5 as the dimension of the dual space w.r.t leg 4. Also conventionally,
 
 import numpy as np
 
-from .utils import svd_merger
-
 
 def contract_x(a, b):
     return a.backend.einsum('abidpq,iBcDPQ->a(bB)c(dD)(pP)(qQ)', a, b)
@@ -32,13 +30,16 @@ def contract_z(a, b):
 
 
 def reduce_x(a, b, option):
-    return svd_merger('abIdpq,IBcDPQ', *a.backend.einsumsvd('abidpq,iBcDPQ->abIdpq,IBcDPQ', a, b, option=option))
+    u, _, vh = a.backend.einsumsvd('abidpq,iBcDPQ->abIdpq,IBcDPQ', a, b, option=option, absorb_s='even')
+    return u, vh
 
 def reduce_y(a, b, option):
-    return svd_merger('aIcdpq,AbCIPQ', *a.backend.einsumsvd('aicdpq,AbCiPQ->aIcdpq,AbCIPQ', a, b, option=option))
+    u, _, vh = a.backend.einsumsvd('aicdpq,AbCiPQ->aIcdpq,AbCIPQ', a, b, option=option, absorb_s='even')
+    return u, vh
 
 def reduce_z(a, b, option):
-    return svd_merger('abcdpI,ABCDIq', *a.backend.einsumsvd('abcdpi,ABCDiq->abcdpI,ABCDIq', a, b, option=option))
+    u, _, vh = a.backend.einsumsvd('abcdpi,ABCDiq->abcdpI,ABCDIq', a, b, option=option, absorb_s='even')
+    return u, vh
 
 
 def rotate_x(a, n=1):
