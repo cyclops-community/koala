@@ -510,6 +510,7 @@ def _compress_contract_first(mps, mpo, svd_option=None, canonicalize=False):
     if canonicalize == 'right':
         mps = mps[::-1]
         mpo = mpo[::-1]
+        
     for i, (s, o) in enumerate(zip(mps, mpo)):
         if canonicalize == 'right':
             s = s.backend.einsum('abcdpq->adcbpq', s)
@@ -527,6 +528,7 @@ def _compress_contract_first(mps, mpo, svd_option=None, canonicalize=False):
                     new_mps[-1] = s.backend.einsum('abBcdpq->a(bB)cdpq', new_mps[-1])
         else:
             new_mps[i] = sites.contract_x(s, o)
+
     if canonicalize == 'right':
         new_mps = new_mps[::-1]
         for i, s in enumerate(new_mps):
@@ -536,7 +538,14 @@ def _compress_contract_first(mps, mpo, svd_option=None, canonicalize=False):
 
 def _compress_svd_first(mps, mpo, svd_option=None, canonicalize=False):
     new_mps = np.empty_like(mps)
+    if canonicalize == 'right':
+        mps = mps[::-1]
+        mpo = mpo[::-1]
+
     for i, (s, o) in enumerate(zip(mps, mpo)):
+        if canonicalize == 'right':
+            s = s.backend.einsum('abcdpq->adcbpq', s)
+            o = o.backend.einsum('abcdpq->adcbpq', o)
         if svd_option:
             if i == 0:
                 new_mps[0], _, left = s.backend.einsumsvd(
@@ -552,6 +561,11 @@ def _compress_svd_first(mps, mpo, svd_option=None, canonicalize=False):
                 )
         else:
             new_mps[i] = sites.contract_x(s, o)
+
+    if canonicalize == 'right':
+        new_mps = new_mps[::-1]
+        for i, s in enumerate(new_mps):
+            new_mps[i] = s.backend.einsum('abcdpq->adcbpq', s)
     return new_mps
 
 
@@ -559,7 +573,6 @@ def _vector_reshaper_BMPS(vector, peps_shape):
     return vector.item() if vector.size == 1 else vector.reshape(
         *[int(round(vector.size ** (1 / np.prod(peps_shape))))] * np.prod(peps_shape)
         ).transpose(*[i + j * peps_shape[0] for i, j in np.ndindex(*peps_shape)])
-
 
 
 def create_env_cache(state1, state2, bmps_option):
