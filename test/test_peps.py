@@ -167,6 +167,9 @@ class TestPEPS(unittest.TestCase):
             Observable.Z(3),
         ])
         self.assertTrue(backend.isclose(qstate.expectation(observable, use_cache=True), -3))
+        cache = peps.make_environment_cache(qstate, qstate)
+        self.assertTrue(backend.isclose(qstate.expectation(observable, use_cache=cache), -3))
+        self.assertTrue(backend.isclose(qstate.norm(cache=cache), 1))
 
     def test_expectation_use_cache_approx(self, backend):
         qstate = peps.computational_zeros(2, 3, backend=backend)

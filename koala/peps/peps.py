@@ -149,8 +149,8 @@ class PEPS(QuantumState):
         else:
             return NotImplemented
 
-    def norm(self, contract_option=None):
-        return sqrt(self.inner(self, contract_option=contract_option).real)
+    def norm(self, contract_option=None, cache=None):
+        return sqrt(self.inner(self, contract_option=contract_option, cache=cache).real)
 
     def add(self, other, *, coeff=1.0):
         """
@@ -189,8 +189,15 @@ class PEPS(QuantumState):
     def contract(self, option=None):
         return contraction.contract(self, option)
 
-    def inner(self, other, contract_option=None):
-        return contraction.contract_sandwich(self.dagger(), other, contract_option)
+    def inner(self, other, contract_option=None, cache=None):
+        if cache is None:
+            return contraction.contract_sandwich(self.dagger(), other, contract_option)
+        else:
+            if contract_option is None:
+                contract_option = contraction.BMPS(svd_option=None)
+            if not isinstance(contract_option, contraction.BMPS):
+                raise ValueError('inner with cache must use BMPS contraction')
+            return contraction.contract_with_env(None, cache, 1, 0, contract_option)
 
     def statevector(self, contract_option=None):
         from .. import statevector
@@ -289,6 +296,18 @@ class PEPS(QuantumState):
             return PEPS(tn, self.backend)
 
 
+def make_environment_cache(p, q, contract_option=None):
+    if p.backend != q.backend:
+        raise ValueError('two states must use the same backend')
+    if p.nsite != q.nsite:
+        raise ValueError('number of sites must be equal in both states')
+    if contract_option is None:
+        contract_option = contraction.BMPS(svd_option=None)
+    if not isinstance(contract_option, contraction.BMPS):
+        raise ValueError('environment cache must use BMPS contraction')
+    return contraction.create_env_cache(p, q, contract_option)
+
+
 def braket(p, observable, q, use_cache=False, contract_option=None):
     if p.backend != q.backend:
         raise ValueError('two states must use the same backend')
@@ -299,7 +318,8 @@ def braket(p, observable, q, use_cache=False, contract_option=None):
             contract_option = contraction.BMPS(svd_option=None)
         if not isinstance(contract_option, contraction.BMPS):
             raise ValueError('braket with cache must use BMPS contraction')
-        return _braket_with_cache(p, observable, q, contract_option)
+        env = use_cache if isinstance(use_cache, tuple) else None
+        return _braket_with_cache(p, observable, q, contract_option, env)
     e = 0
     p_dagger = p.dagger()
     for tensor, sites in observable:
@@ -309,8 +329,11 @@ def braket(p, observable, q, use_cache=False, contract_option=None):
     return e
 
 
-def _braket_with_cache(p, observable, q, bmps_option):
-    env = contraction.create_env_cache(p, q, bmps_option)
+def _braket_with_cache(p, observable, q, bmps_option, cache=None):
+    if cache is None:
+        env = contraction.create_env_cache(p, q, bmps_option)
+    else:
+        env = cache
     p_dagger = p.dagger()
     e = 0
     for tensor, sites in observable:
@@ -318,7 +341,7 @@ def _braket_with_cache(p, observable, q, bmps_option):
         other.apply_operator(q.backend.astensor(tensor), sites)
         rows = [site // q.ncol for site in sites]
         up, down = min(rows), max(rows)
-        e += contraction.inner_with_env(
+        e += contraction.contract_with_env(
             p_dagger[up:down+1].apply(other[up:down+1]),
             env, up, down, bmps_option
         )

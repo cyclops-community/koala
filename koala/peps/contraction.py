@@ -585,9 +585,11 @@ def create_env_cache(state1, state2, bmps_option):
     return upper, lower
 
 
-def inner_with_env(state, env, up_idx, down_idx, bmps_option):
+def contract_with_env(state, env, up_idx, down_idx, bmps_option):
     up, down = env[0].get(up_idx), env[1].get(down_idx)
-    if up is None and down is None:
+    if state is None:
+        peps_obj = up if down is None else up.concatenate(down)
+    elif up is None and down is None:
         peps_obj = state
     elif up is None:
         peps_obj = state.concatenate(down)
