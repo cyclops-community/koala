@@ -25,10 +25,14 @@ class Benchmark:
             import tracemalloc
             tracemalloc.start()
 
+        if self.backend.name in ('ctf', 'ctfview'):
+            import ctf
+            ctf.initialize_flops_counter()
+
         if self.profile_time:
             if self.backend.name in ('ctf', 'ctfview'):
                 import ctf
-                ctf.initialize_flops_counter()
+                # ctf.initialize_flops_counter()
                 self.timer_epoch = ctf.timer_epoch(self.name[:51])
                 self.timer_epoch.begin()
             else:
@@ -39,11 +43,14 @@ class Benchmark:
 
     def __exit__(self, type, value, traceback):
         duration = time() - self.start_time
+        if self.backend.name in ('ctf', 'ctfview'):
+            import ctf
+            self.update_data('flops', ctf.get_estimated_flops())
         if self.profile_time:
             if self.backend.name in ('ctf', 'ctfview'):
                 import ctf
                 self.timer_epoch.end()
-                self.update_data('flops', ctf.get_estimated_flops())
+                # self.update_data('flops', ctf.get_estimated_flops())
             else:
                 self.pr.disable()
         self.update_data('time', duration / self.reps)
@@ -59,16 +66,16 @@ class Benchmark:
             if self.standard:
                 abs_err = abs(self.result - self.standard)
                 self.update_data({
-                    'standard': self.standard,
+                    'standard': self.standard.real,
                     'abs_err': abs_err,
                     'rel_err': abs(abs_err / self.standard)
                 })
 
-        try:
-            import subprocess
-            self.update_data('git_hash', subprocess.check_output(["git", "describe", "--always"]).strip().decode())
-        except:
-            pass
+#       try:
+#           import subprocess
+#           self.update_data('git_hash', subprocess.check_output(["git", "describe", "--always"]).strip().decode())
+#       except:
+#           pass
 
         if all((self.backend.rank == 0, self.printout, self.profile_time, self.backend.name not in ('ctf', 'ctfview'))):
             import pstats

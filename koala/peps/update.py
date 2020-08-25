@@ -206,6 +206,10 @@ def apply_local_pair_operator_qr(state, operator, positions, svd_option):
 
     u, s, v = state.backend.einsumsvd('ikxp,jkyq,xyuv->isup,jsvq', xr, yr, operator, option=svd_option)
     s = s ** 0.5
+    # print(x_pos, recover_x_subscripts)
+    # for tsr in (xq, u, s):
+    #     print(tsr.shape, tsr.reshape(-1), tsr.dtype, tsr.backend, flush=True)
+    # exit()
     state.grid[x_pos] = state.backend.einsum(recover_x_subscripts, xq, u, s)
     state.grid[y_pos] = state.backend.einsum(recover_y_subscripts, yq, v, s)
 
