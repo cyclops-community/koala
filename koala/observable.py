@@ -100,3 +100,9 @@ class Observable:
             for operator, qubits in self.operators
         )
         return f"Observable({operators_str})"
+
+    def copy(self):
+        operators = []
+        for tensor, qubits in self.operators:
+            operators.append((tensor.copy(), qubits))
+        return Observable(operators)
