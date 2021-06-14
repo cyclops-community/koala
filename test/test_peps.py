@@ -25,6 +25,10 @@ class TestPEPS(unittest.TestCase):
         qstate /= 2j
         self.assertTrue(backend.isclose(qstate.norm(), 1))
 
+    def test_trace(self, backend):
+        qstate = peps.identity(3, 3, backend=backend)
+        self.assertTrue(backend.isclose(qstate.trace(), 2**qstate.nsite))
+
     def test_amplitude(self, backend):
         qstate = peps.computational_zeros(2, 3, backend=backend)
         qstate.apply_circuit([

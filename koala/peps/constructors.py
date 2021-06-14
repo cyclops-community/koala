@@ -43,3 +43,11 @@ def random(nrow, ncol, rank, physical_dim=2, dual_dim=1, backend='numpy'):
         )
         grid[i, j] = backend.random.uniform(-1,1,shape) + 1j * backend.random.uniform(-1,1,shape)
     return PEPS(grid, backend)
+
+
+def identity(nrow, ncol, backend='numpy'):
+    backend = tensorbackends.get(backend)
+    grid = np.empty((nrow, ncol), dtype=object)
+    for i, j in np.ndindex(nrow, ncol):
+        grid[i, j] = backend.astensor(np.eye(2,dtype=complex).reshape(1,1,1,1,2,2))
+    return PEPS(grid, backend)

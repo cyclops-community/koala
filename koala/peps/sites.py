@@ -63,3 +63,7 @@ def flip_y(a):
 
 def flip_z(a):
     return a.transpose(0, 1, 2, 3, 5, 4)
+
+
+def trace_z(a):
+    return a.backend.einsum('abcdii->abcd()()', a)

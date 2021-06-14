@@ -152,6 +152,12 @@ class PEPS(QuantumState):
     def norm(self, contract_option=None, cache=None):
         return sqrt(self.inner(self, contract_option=contract_option, cache=cache).real)
 
+    def trace(self, contract_option=None):
+        grid = np.empty_like(self.grid)
+        for idx, tensor in np.ndenumerate(self.grid):
+            grid[idx] = sites.trace_z(tensor)
+        return PEPS(grid, self.backend).contract(option=contract_option)
+
     def add(self, other, *, coeff=1.0):
         """
         Add two PEPS of the same grid shape and return the sum as a third PEPS also with the same grid shape.
