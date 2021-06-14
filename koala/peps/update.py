@@ -45,29 +45,32 @@ class DefaultUpdate(UpdateOption):
         self.rank = rank
 
 
-def apply_single_site_operator(state, operator, position):
+def apply_single_site_operator(state, operator, position, flip=False):
     operator = state.backend.astensor(operator)
-    state.grid[position] = state.backend.einsum('ijklxp,yx->ijklyp', state.grid[position], operator)
+    state.grid[position] = state.backend.einsum(
+        'ijklpx,yx->ijklpy' if flip else 'ijklxp,yx->ijklyp',
+        state.grid[position], operator
+    )
 
 
-def apply_local_pair_operator(state, operator, positions, update_option):
+def apply_local_pair_operator(state, operator, positions, update_option, flip=False):
     if update_option is None:
         update_option = DefaultUpdate()
     if isinstance(update_option, DefaultUpdate):
-        apply_local_pair_operator_qr(state, operator, positions, update_option.rank)
+        apply_local_pair_operator_qr(state, operator, positions, update_option.rank, flip)
     elif isinstance(update_option, DirectUpdate):
-        apply_local_pair_operator_direct(state, operator, positions, update_option.svd_option)
+        apply_local_pair_operator_direct(state, operator, positions, update_option.svd_option, flip)
     elif isinstance(update_option, QRUpdate):
-        apply_local_pair_operator_qr(state, operator, positions, update_option.rank)
+        apply_local_pair_operator_qr(state, operator, positions, update_option.rank, flip)
     elif isinstance(update_option, LocalGramQRUpdate):
-        apply_local_pair_operator_local_gram_qr(state, operator, positions, update_option.rank)
+        apply_local_pair_operator_local_gram_qr(state, operator, positions, update_option.rank, flip)
     elif isinstance(update_option, LocalGramQRSVDUpdate):
-        apply_local_pair_operator_local_gram_qr_svd(state, operator, positions, update_option.rank)
+        apply_local_pair_operator_local_gram_qr_svd(state, operator, positions, update_option.rank, flip)
     else:
         raise ValueError(f'unknown update option: {update_option}')
 
 
-def apply_nonlocal_pair_operator(state, operator, positions, update_option):
+def apply_nonlocal_pair_operator(state, operator, positions, update_option, flip=False):
     assert len(positions) == 2
     x_pos, y_pos = positions
 
@@ -101,7 +104,7 @@ def apply_nonlocal_pair_operator(state, operator, positions, update_option):
 
     for u, v in path:
         swap_local_pair(state, u, v, update_option)
-    apply_local_pair_operator(state, operator, [x_pos, moved_y_pos], update_option)
+    apply_local_pair_operator(state, operator, [x_pos, moved_y_pos], update_option, flip)
     for u, v in reversed(path):
         swap_local_pair(state, u, v, update_option)
 
@@ -138,7 +141,7 @@ def truncate(state, update_option):
             apply_identity((i, j), (i, j+1))
 
 
-def apply_local_pair_operator_direct(state, operator, positions, svd_option):
+def apply_local_pair_operator_direct(state, operator, positions, svd_option, flip=False):
     assert len(positions) == 2
     if svd_option is None:
         svd_option = ReducedSVD()
@@ -146,24 +149,44 @@ def apply_local_pair_operator_direct(state, operator, positions, svd_option):
     x, y = state.grid[x_pos], state.grid[y_pos]
     operator = state.backend.astensor(operator)
 
-    if x_pos[0] < y_pos[0]: # [x y]^T
-        prod_subscripts = 'abcdxp,cfghyq,uvxy->abndup,nfghvq'
-        scale_u_subscripts = 'absdup,s->absdup'
-        scale_v_subscripts = 'sbcdvp,s->sbcdvp'
-    elif x_pos[0] > y_pos[0]: # [y x]^T
-        prod_subscripts = 'abcdxp,efahyq,uvxy->nbcdup,efnhvq'
-        scale_u_subscripts = 'sbcdup,s->sbcdup'
-        scale_v_subscripts = 'absdvp,s->absdvp'
-    elif x_pos[1] < y_pos[1]: # [x y]
-        prod_subscripts = 'abcdxp,efgbyq,uvxy->ancdup,efgnvq'
-        scale_u_subscripts = 'ascdup,s->ascdup'
-        scale_v_subscripts = 'abcsvp,s->abcsvp'
-    elif x_pos[1] > y_pos[1]: # [y x]
-        prod_subscripts = 'abcdxp,edghyq,uvxy->abcnup,enghvq'
-        scale_u_subscripts = 'abcsup,s->abcsup'
-        scale_v_subscripts = 'ascdvp,s->ascdvp'
+    if flip:
+        if x_pos[0] < y_pos[0]: # [x y]^T
+            prod_subscripts = 'abcdpx,cfghqy,uvxy->abndpu,nfghqv'
+            scale_u_subscripts = 'absdpu,s->absdpu'
+            scale_v_subscripts = 'sbcdpv,s->sbcdpv'
+        elif x_pos[0] > y_pos[0]: # [y x]^T
+            prod_subscripts = 'abcdpx,efahqy,uvxy->nbcdpu,efnhqv'
+            scale_u_subscripts = 'sbcdpu,s->sbcdpu'
+            scale_v_subscripts = 'absdpv,s->absdpv'
+        elif x_pos[1] < y_pos[1]: # [x y]
+            prod_subscripts = 'abcdpx,efgbqy,uvxy->ancdpu,efgnqv'
+            scale_u_subscripts = 'ascdpu,s->ascdpu'
+            scale_v_subscripts = 'abcspv,s->abcspv'
+        elif x_pos[1] > y_pos[1]: # [y x]
+            prod_subscripts = 'abcdpx,edghqy,uvxy->abcnpu,enghqv'
+            scale_u_subscripts = 'abcspu,s->abcspu'
+            scale_v_subscripts = 'ascdpv,s->ascdpv'
+        else:
+            assert False
     else:
-        assert False
+        if x_pos[0] < y_pos[0]: # [x y]^T
+            prod_subscripts = 'abcdxp,cfghyq,uvxy->abndup,nfghvq'
+            scale_u_subscripts = 'absdup,s->absdup'
+            scale_v_subscripts = 'sbcdvp,s->sbcdvp'
+        elif x_pos[0] > y_pos[0]: # [y x]^T
+            prod_subscripts = 'abcdxp,efahyq,uvxy->nbcdup,efnhvq'
+            scale_u_subscripts = 'sbcdup,s->sbcdup'
+            scale_v_subscripts = 'absdvp,s->absdvp'
+        elif x_pos[1] < y_pos[1]: # [x y]
+            prod_subscripts = 'abcdxp,efgbyq,uvxy->ancdup,efgnvq'
+            scale_u_subscripts = 'ascdup,s->ascdup'
+            scale_v_subscripts = 'abcsvp,s->abcsvp'
+        elif x_pos[1] > y_pos[1]: # [y x]
+            prod_subscripts = 'abcdxp,edghyq,uvxy->abcnup,enghvq'
+            scale_u_subscripts = 'abcsup,s->abcsup'
+            scale_v_subscripts = 'ascdvp,s->ascdvp'
+        else:
+            assert False
 
     u, s, v = state.backend.einsumsvd(prod_subscripts, x, y, operator, option=svd_option)
     s = s ** 0.5
@@ -173,81 +196,137 @@ def apply_local_pair_operator_direct(state, operator, positions, svd_option):
     state.grid[y_pos] = v
 
 
-def apply_local_pair_operator_qr(state, operator, positions, rank):
+def apply_local_pair_operator_qr(state, operator, positions, rank, flip=False):
     assert len(positions) == 2
     svd_option = ReducedSVD(rank)
     x_pos, y_pos = positions
     x, y = state.grid[x_pos], state.grid[y_pos]
     operator = state.backend.astensor(operator)
 
-    if x_pos[0] < y_pos[0]: # [x y]^T
-        split_x_subscripts = 'abcdxp->abdi,icxp'
-        split_y_subscripts = 'cfghyq->fghj,jcyq'
-        recover_x_subscripts = 'abdi,isup,s->absdup'
-        recover_y_subscripts = 'fghj,jsvq,s->sfghvq'
-    elif x_pos[0] > y_pos[0]: # [y x]^T
-        split_x_subscripts = 'abcdxp->bcdi,iaxp'
-        split_y_subscripts = 'efahyq->efhj,jayq'
-        recover_x_subscripts = 'bcdi,isup,s->sbcdup'
-        recover_y_subscripts = 'efhj,jsvq,s->efshvq'
-    elif x_pos[1] < y_pos[1]: # [x y]
-        split_x_subscripts = 'abcdxp->acdi,ibxp'
-        split_y_subscripts = 'efgbyq->efgj,jbyq'
-        recover_x_subscripts = 'acdi,isup,s->ascdup'
-        recover_y_subscripts = 'efgj,jsvq,s->efgsvq'
-    elif x_pos[1] > y_pos[1]: # [y x]
-        split_x_subscripts = 'abcdxp->abci,idxp'
-        split_y_subscripts = 'edghyq->eghj,jdyq'
-        recover_x_subscripts = 'abci,isup,s->abcsup'
-        recover_y_subscripts = 'eghj,jsvq,s->esghvq'
+    if flip:
+        if x_pos[0] < y_pos[0]: # [x y]^T
+            split_x_subscripts = 'abcdpx->abdpi,icx'
+            split_y_subscripts = 'cfghqy->fghqj,jcy'
+            recover_x_subscripts = 'abdpi,isu,s->absdpu'
+            recover_y_subscripts = 'fghqj,jsv,s->sfghqv'
+        elif x_pos[0] > y_pos[0]: # [y x]^T
+            split_x_subscripts = 'abcdpx->bcdpi,iax'
+            split_y_subscripts = 'efahqy->efhqj,jay'
+            recover_x_subscripts = 'bcdpi,isu,s->sbcdpu'
+            recover_y_subscripts = 'efhqj,jsv,s->efshqv'
+        elif x_pos[1] < y_pos[1]: # [x y]
+            split_x_subscripts = 'abcdpx->acdpi,ibx'
+            split_y_subscripts = 'efgbqy->efgqj,jby'
+            recover_x_subscripts = 'acdpi,isu,s->ascdpu'
+            recover_y_subscripts = 'efgqj,jsv,s->efgsqv'
+        elif x_pos[1] > y_pos[1]: # [y x]
+            split_x_subscripts = 'abcdpx->abcpi,idx'
+            split_y_subscripts = 'edghqy->eghqj,jdy'
+            recover_x_subscripts = 'abcpi,isu,s->abcspu'
+            recover_y_subscripts = 'eghqj,jsv,s->esghqv'
+        else:
+            assert False
     else:
-        assert False
+        if x_pos[0] < y_pos[0]: # [x y]^T
+            split_x_subscripts = 'abcdxp->abdpi,icx'
+            split_y_subscripts = 'cfghyq->fghqj,jcy'
+            recover_x_subscripts = 'abdpi,isu,s->absdup'
+            recover_y_subscripts = 'fghqj,jsv,s->sfghvq'
+        elif x_pos[0] > y_pos[0]: # [y x]^T
+            split_x_subscripts = 'abcdxp->bcdpi,iax'
+            split_y_subscripts = 'efahyq->efhqj,jay'
+            recover_x_subscripts = 'bcdpi,isu,s->sbcdup'
+            recover_y_subscripts = 'efhqj,jsv,s->efshvq'
+        elif x_pos[1] < y_pos[1]: # [x y]
+            split_x_subscripts = 'abcdxp->acdpi,ibx'
+            split_y_subscripts = 'efgbyq->efgqj,jby'
+            recover_x_subscripts = 'acdpi,isu,s->ascdup'
+            recover_y_subscripts = 'efgqj,jsv,s->efgsvq'
+        elif x_pos[1] > y_pos[1]: # [y x]
+            split_x_subscripts = 'abcdxp->abcpi,idx'
+            split_y_subscripts = 'edghyq->eghqj,jdy'
+            recover_x_subscripts = 'abcpi,isu,s->abcsup'
+            recover_y_subscripts = 'eghqj,jsv,s->esghvq'
+        else:
+            assert False
 
     xq, xr = state.backend.einqr(split_x_subscripts, x)
     yq, yr = state.backend.einqr(split_y_subscripts, y)
 
-    u, s, v = state.backend.einsumsvd('ikxp,jkyq,uvxy->isup,jsvq', xr, yr, operator, option=svd_option)
+    u, s, v = state.backend.einsumsvd('ikx,jky,uvxy->isu,jsv', xr, yr, operator, option=svd_option)
     s = s ** 0.5
     state.grid[x_pos] = state.backend.einsum(recover_x_subscripts, xq, u, s)
     state.grid[y_pos] = state.backend.einsum(recover_y_subscripts, yq, v, s)
 
 
-def apply_local_pair_operator_local_gram_qr(state, operator, positions, rank):
+def apply_local_pair_operator_local_gram_qr(state, operator, positions, rank, flip=False):
     assert len(positions) == 2
     x_pos, y_pos = positions
     x, y = state.grid[x_pos], state.grid[y_pos]
     operator = state.backend.astensor(operator)
 
-    if x_pos[0] < y_pos[0]: # [x y]^T
-        gram_x_subscripts = 'abcdxp,abCdXp->xcXC'
-        gram_y_subscripts = 'cfghyq,CfghYq->ycYC'
-        xq_subscripts = 'abcdxp,xci->abdpi'
-        yq_subscripts = 'cfghyq,ycj->fghqj'
-        recover_x_subscripts = 'abdpi,isu,s->absdup'
-        recover_y_subscripts = 'fghqj,jsv,s->sfghvq'
-    elif x_pos[0] > y_pos[0]: # [y x]^T
-        gram_x_subscripts = 'abcdxp,AbcdXp->xaXA'
-        gram_y_subscripts = 'efahyq,efAhYq->yaYA'
-        xq_subscripts = 'abcdxp,xai->bcdpi'
-        yq_subscripts = 'efahyq,yaj->efhqj'
-        recover_x_subscripts = 'bcdpi,isu,s->sbcdup'
-        recover_y_subscripts = 'efhqj,jsv,s->efshvq'
-    elif x_pos[1] < y_pos[1]: # [x y]
-        gram_x_subscripts = 'abcdxp,aBcdXp->xbXB'
-        gram_y_subscripts = 'efgbyq,efgBYq->ybYB'
-        xq_subscripts = 'abcdxp,xbi->acdpi'
-        yq_subscripts = 'efgbyq,ybj->efgqj'
-        recover_x_subscripts = 'acdpi,isu,s->ascdup'
-        recover_y_subscripts = 'efgqj,jsv,s->efgsvq'
-    elif x_pos[1] > y_pos[1]: # [y x]
-        gram_x_subscripts = 'abcdxp,abcDXp->xdXD'
-        gram_y_subscripts = 'edghyq,eDghYq->ydYD'
-        xq_subscripts = 'abcdxp,xdi->abcpi'
-        yq_subscripts = 'edghyq,ydj->eghqj'
-        recover_x_subscripts = 'abcpi,isu,s->abcsup'
-        recover_y_subscripts = 'eghqj,jsv,s->esghvq'
+    if flip:
+        if x_pos[0] < y_pos[0]: # [x y]^T
+            gram_x_subscripts = 'abcdpx,abCdpX->xcXC'
+            gram_y_subscripts = 'cfghqy,CfghqY->ycYC'
+            xq_subscripts = 'abcdpx,xci->abdpi'
+            yq_subscripts = 'cfghqy,ycj->fghqj'
+            recover_x_subscripts = 'abdpi,isu,s->absdpu'
+            recover_y_subscripts = 'fghqj,jsv,s->sfghqv'
+        elif x_pos[0] > y_pos[0]: # [y x]^T
+            gram_x_subscripts = 'abcdpx,AbcdpX->xaXA'
+            gram_y_subscripts = 'efahpy,efAhpY->yaYA'
+            xq_subscripts = 'abcdpx,xai->bcdpi'
+            yq_subscripts = 'efahqy,yaj->efhqj'
+            recover_x_subscripts = 'bcdpi,isu,s->sbcdpu'
+            recover_y_subscripts = 'efhqj,jsv,s->efshqv'
+        elif x_pos[1] < y_pos[1]: # [x y]
+            gram_x_subscripts = 'abcdpx,aBcdpX->xbXB'
+            gram_y_subscripts = 'efgbqy,efgBqY->ybYB'
+            xq_subscripts = 'abcdpx,xbi->acdpi'
+            yq_subscripts = 'efgbqy,ybj->efgqj'
+            recover_x_subscripts = 'acdpi,isu,s->ascdpu'
+            recover_y_subscripts = 'efgqj,jsv,s->efgsqv'
+        elif x_pos[1] > y_pos[1]: # [y x]
+            gram_x_subscripts = 'abcdpx,abcDpX->xdXD'
+            gram_y_subscripts = 'edghqy,eDghqY->ydYD'
+            xq_subscripts = 'abcdpx,xdi->abcpi'
+            yq_subscripts = 'edghqy,ydj->eghqj'
+            recover_x_subscripts = 'abcpi,isu,s->abcspu'
+            recover_y_subscripts = 'eghqj,jsv,s->esghqv'
+        else:
+            assert False
     else:
-        assert False
+        if x_pos[0] < y_pos[0]: # [x y]^T
+            gram_x_subscripts = 'abcdxp,abCdXp->xcXC'
+            gram_y_subscripts = 'cfghyq,CfghYq->ycYC'
+            xq_subscripts = 'abcdxp,xci->abdpi'
+            yq_subscripts = 'cfghyq,ycj->fghqj'
+            recover_x_subscripts = 'abdpi,isu,s->absdup'
+            recover_y_subscripts = 'fghqj,jsv,s->sfghvq'
+        elif x_pos[0] > y_pos[0]: # [y x]^T
+            gram_x_subscripts = 'abcdxp,AbcdXp->xaXA'
+            gram_y_subscripts = 'efahyq,efAhYq->yaYA'
+            xq_subscripts = 'abcdxp,xai->bcdpi'
+            yq_subscripts = 'efahyq,yaj->efhqj'
+            recover_x_subscripts = 'bcdpi,isu,s->sbcdup'
+            recover_y_subscripts = 'efhqj,jsv,s->efshvq'
+        elif x_pos[1] < y_pos[1]: # [x y]
+            gram_x_subscripts = 'abcdxp,aBcdXp->xbXB'
+            gram_y_subscripts = 'efgbyq,efgBYq->ybYB'
+            xq_subscripts = 'abcdxp,xbi->acdpi'
+            yq_subscripts = 'efgbyq,ybj->efgqj'
+            recover_x_subscripts = 'acdpi,isu,s->ascdup'
+            recover_y_subscripts = 'efgqj,jsv,s->efgsvq'
+        elif x_pos[1] > y_pos[1]: # [y x]
+            gram_x_subscripts = 'abcdxp,abcDXp->xdXD'
+            gram_y_subscripts = 'edghyq,eDghYq->ydYD'
+            xq_subscripts = 'abcdxp,xdi->abcpi'
+            yq_subscripts = 'edghyq,ydj->eghqj'
+            recover_x_subscripts = 'abcpi,isu,s->abcsup'
+            recover_y_subscripts = 'eghqj,jsv,s->esghvq'
+        else:
+            assert False
 
     def gram_qr_local(backend, a, gram_a_subscripts, q_subscripts):
         gram_a = backend.einsum(gram_a_subscripts, a.conj(), a)
@@ -275,45 +354,61 @@ def apply_local_pair_operator_local_gram_qr(state, operator, positions, rank):
     state.grid[y_pos] = state.backend.einsum(recover_y_subscripts, yq, v, s)
 
 
-def apply_local_pair_operator_local_gram_qr_svd(state, operator, positions, rank):
+def apply_local_pair_operator_local_gram_qr_svd(state, operator, positions, rank, flip=False):
     assert len(positions) == 2
     x_pos, y_pos = positions
     x, y = state.grid[x_pos], state.grid[y_pos]
 
-    if x_pos[0] < y_pos[0]: # [x y]^T
-        gram_x_subscripts = 'abcdxp,abCdXp->xcXC'
-        gram_y_subscripts = 'cfghyq,CfghYq->ycYC'
-        xq_subscripts = 'abcdxp,xci->abdpi'
-        yq_subscripts = 'cfghyq,ycj->fghqj'
-        recover_x_subscripts = 'abcdxp,cxsu->absdup'
-        recover_y_subscripts = 'cfghyq,cysv->sfghvq'
-    elif x_pos[0] > y_pos[0]: # [y x]^T
-        gram_x_subscripts = 'abcdxp,AbcdXp->xaXA'
-        gram_y_subscripts = 'efahyq,efAhYq->yaYA'
-        xq_subscripts = 'abcdxp,xai->bcdpi'
-        yq_subscripts = 'efahyq,yaj->efhqj'
-        recover_x_subscripts = 'abcdxp,axsu->sbcdup'
-        recover_y_subscripts = 'efahyq,aysv->efshvq'
-    elif x_pos[1] < y_pos[1]: # [x y]
-        gram_x_subscripts = 'abcdxp,aBcdXp->xbXB'
-        gram_y_subscripts = 'efgbyq,efgBYq->ybYB'
-        xq_subscripts = 'abcdxp,xbi->acdpi'
-        yq_subscripts = 'efgbyq,ybj->efgqj'
-        recover_x_subscripts = 'abcdxp,bxsu->ascdup'
-        recover_y_subscripts = 'efgbyq,bysv->efgsvq'
-    elif x_pos[1] > y_pos[1]: # [y x]
-        gram_x_subscripts = 'abcdxp,abcDXp->xdXD'
-        gram_y_subscripts = 'edghyq,eDghYq->ydYD'
-        xq_subscripts = 'abcdxp,xdi->abcpi'
-        yq_subscripts = 'edghyq,ydj->eghqj'
-        recover_x_subscripts = 'abcdxp,dxsu->abcsup'
-        recover_y_subscripts = 'edghyq,dysv->esghvq'
+    if flip:
+        if x_pos[0] < y_pos[0]: # [x y]^T
+            gram_x_subscripts = 'abcdpx,abCdpX->xcXC'
+            gram_y_subscripts = 'cfghqy,CfghqY->ycYC'
+            recover_x_subscripts = 'abcdpx,cxsu->absdpu'
+            recover_y_subscripts = 'cfghqy,cysv->sfghqv'
+        elif x_pos[0] > y_pos[0]: # [y x]^T
+            gram_x_subscripts = 'abcdpx,AbcdpX->xaXA'
+            gram_y_subscripts = 'efahpy,efAhpY->yaYA'
+            recover_x_subscripts = 'abcdpx,axsu->sbcdpu'
+            recover_y_subscripts = 'efahqy,aysv->efshqv'
+        elif x_pos[1] < y_pos[1]: # [x y]
+            gram_x_subscripts = 'abcdpx,aBcdpX->xbXB'
+            gram_y_subscripts = 'efgbqy,efgBqY->ybYB'
+            recover_x_subscripts = 'abcdpx,bxsu->ascdpu'
+            recover_y_subscripts = 'efgbqy,bysv->efgsqv'
+        elif x_pos[1] > y_pos[1]: # [y x]
+            gram_x_subscripts = 'abcdpx,abcDpX->xdXD'
+            gram_y_subscripts = 'edghqy,eDghqY->ydYD'
+            recover_x_subscripts = 'abcdpx,dxsu->abcspu'
+            recover_y_subscripts = 'edghqy,dysv->esghqv'
+        else:
+            assert False
     else:
-        assert False
+        if x_pos[0] < y_pos[0]: # [x y]^T
+            gram_x_subscripts = 'abcdxp,abCdXp->xcXC'
+            gram_y_subscripts = 'cfghyq,CfghYq->ycYC'
+            recover_x_subscripts = 'abcdxp,cxsu->absdup'
+            recover_y_subscripts = 'cfghyq,cysv->sfghvq'
+        elif x_pos[0] > y_pos[0]: # [y x]^T
+            gram_x_subscripts = 'abcdxp,AbcdXp->xaXA'
+            gram_y_subscripts = 'efahyq,efAhYq->yaYA'
+            recover_x_subscripts = 'abcdxp,axsu->sbcdup'
+            recover_y_subscripts = 'efahyq,aysv->efshvq'
+        elif x_pos[1] < y_pos[1]: # [x y]
+            gram_x_subscripts = 'abcdxp,aBcdXp->xbXB'
+            gram_y_subscripts = 'efgbyq,efgBYq->ybYB'
+            recover_x_subscripts = 'abcdxp,bxsu->ascdup'
+            recover_y_subscripts = 'efgbyq,bysv->efgsvq'
+        elif x_pos[1] > y_pos[1]: # [y x]
+            gram_x_subscripts = 'abcdxp,abcDXp->xdXD'
+            gram_y_subscripts = 'edghyq,eDghYq->ydYD'
+            recover_x_subscripts = 'abcdxp,dxsu->abcsup'
+            recover_y_subscripts = 'edghyq,dysv->esghvq'
+        else:
+            assert False
 
     numpy_backend = tensorbackends.get('numpy')
 
-    def gram_qr_local(backend, a, gram_a_subscripts, q_subscripts):
+    def gram_qr_local(backend, a, gram_a_subscripts):
         gram_a = backend.einsum(gram_a_subscripts, a.conj(), a)
         d, xi = gram_a.shape[:2]
 
@@ -326,8 +421,8 @@ def apply_local_pair_operator_local_gram_qr_svd(state, operator, positions, rank
         r_inv = np.einsum('j,ij->ij', s_pinv, v).reshape(d, xi, d*xi)
         return numpy_backend.tensor(r), numpy_backend.tensor(r_inv)
 
-    xr, xr_inv = gram_qr_local(state.backend, x, gram_x_subscripts, xq_subscripts)
-    yr, yr_inv = gram_qr_local(state.backend, y, gram_y_subscripts, yq_subscripts)
+    xr, xr_inv = gram_qr_local(state.backend, x, gram_x_subscripts)
+    yr, yr_inv = gram_qr_local(state.backend, y, gram_y_subscripts)
 
     operator = numpy_backend.tensor(operator if isinstance(operator, np.ndarray) else operator.numpy())
     u, s, v = numpy_backend.einsumsvd('ixk,jyk,uvxy->isu,jsv', xr, yr, operator, option=ReducedSVD(rank))
