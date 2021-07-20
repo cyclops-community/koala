@@ -152,11 +152,46 @@ class PEPS(QuantumState):
     def norm(self, contract_option=None, cache=None):
         return sqrt(self.inner(self, contract_option=contract_option, cache=cache).real)
 
-    def trace(self, contract_option=None):
+    def trace_sitewise(self):
         grid = np.empty_like(self.grid)
         for idx, tensor in np.ndenumerate(self.grid):
             grid[idx] = sites.trace_z(tensor)
-        return PEPS(grid, self.backend).contract(option=contract_option)
+        return PEPS(grid, self.backend)
+
+    def trace(self, observable=None, contract_option=None, cache=None):
+        if cache is None:
+            if observable is None:
+                return self.trace_sitewise().contract(option=contract_option)
+            else:
+                result = 0.0
+                for op, pos in observable:
+                    qstate = self.copy()
+                    qstate.apply_operator(op, pos)
+                    result += qstate.trace(contract_option=contract_option)
+                return result
+        else:
+            if not isinstance(contract_option, contraction.BMPS):
+                raise ValueError(f'cache only works with BMPS contraction: {contract_option}')
+            return self._trace_with_cache(observable, contract_option, cache)
+
+    def _trace_with_cache(self, observable, bmps_option, cache):
+        if observable is None:
+            return contraction.contract_with_env(self[0:1].trace_sitewise(), cache, 0, 0, bmps_option)
+        else:
+            e = 0
+            for tensor, sites in observable:
+                other = self.copy()
+                other.apply_operator(self.backend.astensor(tensor), sites)
+                rows = [site // self.ncol for site in sites]
+                up, down = min(rows), max(rows)
+                e += contraction.contract_with_env(
+                    other[up:down+1].trace_sitewise(),
+                    cache, up, down, bmps_option
+                )
+            return e
+
+    def make_trace_cache(self, contract_option=None):
+        return contraction.create_env_cache(self.trace_sitewise(), contract_option)
 
     def add(self, other, *, coeff=1.0):
         """
@@ -302,7 +337,7 @@ class PEPS(QuantumState):
             return PEPS(tn, self.backend)
 
 
-def make_environment_cache(p, q, contract_option=None):
+def make_expectation_cache(p, q, contract_option=None):
     if p.backend != q.backend:
         raise ValueError('two states must use the same backend')
     if p.nsite != q.nsite:
@@ -310,8 +345,8 @@ def make_environment_cache(p, q, contract_option=None):
     if contract_option is None:
         contract_option = contraction.BMPS(svd_option=None)
     if not isinstance(contract_option, contraction.BMPS):
-        raise ValueError('environment cache must use BMPS contraction')
-    return contraction.create_env_cache(p, q, contract_option)
+        raise ValueError('expectation cache must use BMPS contraction')
+    return contraction.create_env_cache(p.dagger().apply(q), contract_option)
 
 
 def braket(p, observable, q, use_cache=False, contract_option=None):
@@ -336,11 +371,11 @@ def braket(p, observable, q, use_cache=False, contract_option=None):
 
 
 def _braket_with_cache(p, observable, q, bmps_option, cache=None):
+    p_dagger = p.dagger()
     if cache is None:
-        env = contraction.create_env_cache(p, q, bmps_option)
+        env = contraction.create_env_cache(p_dagger.apply(q), bmps_option)
     else:
         env = cache
-    p_dagger = p.dagger()
     e = 0
     for tensor, sites in observable:
         other = q.copy()

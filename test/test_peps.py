@@ -4,8 +4,8 @@ import numpy as np
 from tensorbackends.interface import ImplicitRandomizedSVD, ReducedSVD, RandomizedSVD
 from tensorbackends.utils import test_with_backend
 
-from koala import Observable, peps, statevector, Gate
-from koala.peps import contract_options, Snake, ABMPS, BMPS, Square, TRG
+from koala import Observable, observable, peps, statevector, Gate
+from koala.peps import contract_options, Snake, ABMPS, BMPS, Square, TRG, contraction
 
 
 @test_with_backend()
@@ -26,8 +26,24 @@ class TestPEPS(unittest.TestCase):
         self.assertTrue(backend.isclose(qstate.norm(), 1))
 
     def test_trace(self, backend):
+        observable = Observable.ZZ(0,1) + Observable.ZZ(0,3)
         qstate = peps.identity(3, 3, backend=backend)
         self.assertTrue(backend.isclose(qstate.trace(), 2**qstate.nsite))
+        self.assertTrue(backend.isclose(qstate.trace(observable), 0, atol=1e-8))
+
+    def test_trace_with_cache(self, backend):
+        observable = Observable.ZZ(0,1) + Observable.ZZ(0,3)
+        contract_option = BMPS(ReducedSVD(1))
+        qstate = peps.identity(3, 3, backend=backend)
+        cache = qstate.make_trace_cache(contract_option)
+        self.assertTrue(backend.isclose(
+            qstate.trace(contract_option=contract_option, cache=cache),
+            2**qstate.nsite
+        ))
+        self.assertTrue(backend.isclose(
+            qstate.trace(observable, contract_option=contract_option, cache=cache), 
+            0, atol=1e-8
+        ))
 
     def test_amplitude(self, backend):
         qstate = peps.computational_zeros(2, 3, backend=backend)
@@ -193,7 +209,7 @@ class TestPEPS(unittest.TestCase):
             Observable.Z(3),
         ])
         self.assertTrue(backend.isclose(qstate.expectation(observable, use_cache=True), -3))
-        cache = peps.make_environment_cache(qstate, qstate)
+        cache = peps.make_expectation_cache(qstate, qstate)
         self.assertTrue(backend.isclose(qstate.expectation(observable, use_cache=cache), -3))
         self.assertTrue(backend.isclose(qstate.norm(cache=cache), 1))
 

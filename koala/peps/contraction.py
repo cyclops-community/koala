@@ -570,15 +570,14 @@ def _compress_svd_first(mps, mpo, svd_option=None, canonicalize=False):
 
 
 def _vector_reshaper_BMPS(vector, peps_shape):
+    # return vector.item()if vector.size == 1 else vector # FIXME: support both PEPS/PEPO
     return vector.item() if vector.size == 1 else vector.reshape(
         *[int(round(vector.size ** (1 / np.prod(peps_shape))))] * np.prod(peps_shape)
         ).transpose(*[i + j * peps_shape[0] for i, j in np.ndindex(*peps_shape)])
 
 
-def create_env_cache(state1, state2, bmps_option):
-    assert state1.shape == state2.shape
-    peps_obj = state1.dagger().apply(state2)
-    upper_mps_list = _contract_to_MPS_cache(peps_obj[:state1.nrow], svd_option=bmps_option.svd_option)
+def create_env_cache(peps_obj, bmps_option):
+    upper_mps_list = _contract_to_MPS_cache(peps_obj[:peps_obj.nrow], svd_option=bmps_option.svd_option)
     lower_mps_list = _contract_to_MPS_cache(peps_obj[1:], reverse=True, svd_option=bmps_option.svd_option)
     upper = {i: mps for i, mps in enumerate(upper_mps_list, 1)}
     lower = {i: mps for i, mps in enumerate(lower_mps_list)}
